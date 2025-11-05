@@ -13,7 +13,7 @@ const ResultsDisplay = ({ results, inputData }) => {
   };
 
   if (!inputData || !inputData.masses || !inputData.weight_fractions) {
-    return <div>Erro: dados de entrada não disponíveis para visualização.</div>;
+    return <div>Error: input data not available for view.</div>;
   }
 
   const plotData = [
@@ -22,7 +22,7 @@ const ResultsDisplay = ({ results, inputData }) => {
       y: inputData.weight_fractions,
       type: 'bar',
       marker: { color: '#4A90E2' },
-      name: 'Fração em Peso'
+      name: 'Weight Fraction'
     }
   ];
 
@@ -37,18 +37,18 @@ const ResultsDisplay = ({ results, inputData }) => {
 
   return (
     <div className="results-section">
-      <h2>Resultados</h2>
+      <h2>Results</h2>
       <div className="metrics">
         <div className="metric-box">
-          <h4>Mn (numérico)</h4>
+          <h4>Mn (numerical)</h4>
           <p>{results.Mn.toFixed(2)} g/mol</p>
         </div>
         <div className="metric-box">
-          <h4>Mw (peso)</h4>
+          <h4>Mw (weight)</h4>
           <p>{results.Mw.toFixed(2)} g/mol</p>
         </div>
         <div className="metric-box">
-          <h4>Đ (dispersidade)</h4>
+          <h4>Đ (dispersity)</h4>
           <p>{results.dispersity.toFixed(4)}</p>
         </div>
       </div>
