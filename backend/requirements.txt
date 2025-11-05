@@ -1,7 +1,7 @@
-fastapi[all]==0.115.0
-uvicorn==0.32.0
+fastapi[all]
+uvicorn
 pydantic==2.9.2
-pandas==2.2.2
-numpy==2.1.0
+pandas>=2.0.0
+numpy>=1.24.0
 python-multipart==0.0.17
 pytest==8.3.3
