@@ -10,7 +10,7 @@ const FileUploader = ({ onFileSelect }) => {
         setFileName(file.name);
         onFileSelect(file);
       } else {
-        alert('Por favor, selecione um arquivo CSV.');
+        alert('Please select a CSV file.');
         e.target.value = null;
         onFileSelect(null);
       }
@@ -22,12 +22,12 @@ const FileUploader = ({ onFileSelect }) => {
 
   return (
     <div className="form-section">
-      <h3>Upload de Arquivo CSV</h3>
+      <h3>CSV File Upload</h3>
       <label className="file-upload">
         <input type="file" accept=".csv" onChange={handleFileChange} />
-        {fileName || 'Clique para selecionar um arquivo CSV'}
+        {fileName || 'Click to select a CSV file'}
       </label>
-      <p className="help-text">Colunas esperadas: <code>massa,fracao</code></p>
+      <p className="help-text">Expected columns: <code>massa,fracao</code> or <code>mass,fraction</code></p>
     </div>
   );
 };
