@@ -1,22 +1,19 @@
-import axios from 'axios';
 
-const API_BASE_URL = 'https://polymer-analysis-toolkit.onrender.com';
+// frontend/src/services/api.js
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
 export const molecularApi = {
   calculate: async (jsonData = null, csvFile = null) => {
-    const formData = new FormData();
-    
     if (jsonData) {
-      return axios.post(`${API_BASE_URL}/molecular/calc`, jsonData);
+      return axios.post(`${API_BASE_URL}/api/v1/molecular/calc`, jsonData);
     }
-    
     if (csvFile) {
+      const formData = new FormData();
       formData.append('file', csvFile);
-      return axios.post(`${API_BASE_URL}/molecular/calc`, formData, {
+      return axios.post(`${API_BASE_URL}/api/v1/molecular/calc`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
     }
-    
-    throw new Error('Either jsonData or csvFile must be provided');
+    throw new Error('Either JSON data or CSV file must be provided');
   }
 };
