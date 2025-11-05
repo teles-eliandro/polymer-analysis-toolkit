@@ -24,12 +24,12 @@ const MolecularForm = ({ onManualDataChange }) => {
 
   return (
     <div className="form-section">
-      <h3>Entrada Manual</h3>
+      <h3>Manual Input</h3>
       {rows.map((row, index) => (
         <div key={index} className="input-row">
           <input
             type="number"
-            placeholder="Massa"
+            placeholder="Mass (g/mol)"
             value={row.massa}
             onChange={(e) => handleInputChange(index, 'massa', e.target.value)}
             min="0"
@@ -37,7 +37,7 @@ const MolecularForm = ({ onManualDataChange }) => {
           />
           <input
             type="number"
-            placeholder="Fração (peso)"
+            placeholder="Weight Fraction"
             value={row.fracao}
             onChange={(e) => handleInputChange(index, 'fracao', e.target.value)}
             min="0"
@@ -49,7 +49,7 @@ const MolecularForm = ({ onManualDataChange }) => {
         </div>
       ))}
       <button type="button" onClick={addRow} className="add-row-btn">
-        + Adicionar linha
+        + Add Row
       </button>
     </div>
   );
