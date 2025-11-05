@@ -1,24 +1,16 @@
 import React, { useState } from 'react';
-import MolecularForm from './components/MolecularForm';
 import FileUploader from './components/FileUploader';
 import ResultsDisplay from './components/ResultsDisplay';
 import { molecularApi } from './services/api';
 import './App.css';
 
 function App() {
-  const [manualData, setManualData] = useState([{ massa: '', fracao: '' }]);
   const [csvFile, setCsvFile] = useState(null);
   const [csvPreview, setCsvPreview] = useState(null);
   const [results, setResults] = useState(null);
   const [inputData, setInputData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-
-  const handleManualDataChange = (rows) => {
-    setManualData(rows);
-    setCsvFile(null);
-    setCsvPreview(null);
-  };
 
   const handleFileSelect = (file) => {
     if (!file) {
@@ -28,25 +20,27 @@ function App() {
     }
 
     if (!file.name.endsWith('.csv')) {
-      alert('Please select a CSV file.');
+      setError('Please select a CSV file.');
       return;
     }
 
     setCsvFile(file);
-    setManualData([{ massa: '', fracao: '' }]);
 
     const reader = new FileReader();
     reader.onload = (e) => {
       const text = e.target.result;
       const lines = text.split('\n').filter(line => line.trim() !== '');
-      if (lines.length < 2) return;
+      if (lines.length < 2) {
+        setError('CSV must contain at least one data row.');
+        return;
+      }
 
       const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
       const massIndex = headers.indexOf('massa');
       const fracIndex = headers.indexOf('fracao');
 
       if (massIndex === -1 || fracIndex === -1) {
-        setError('CSV must contain "massa" and "fracao" columns.');
+        setError('CSV must contain columns named exactly: "massa" and "fracao".');
         return;
       }
 
@@ -63,7 +57,7 @@ function App() {
       }
 
       if (data.length === 0) {
-        setError('No valid data found in CSV.');
+        setError('No valid numeric data found in CSV.');
         return;
       }
 
@@ -71,7 +65,7 @@ function App() {
       const fracs = data.map(d => d.fracao);
       const total = fracs.reduce((a, b) => a + b, 0);
       if (Math.abs(total - 1.0) > 0.001) {
-        setError(`CSV fractions sum to ${total.toFixed(4)} (must be 1.0).`);
+        setError(`Fractions must sum to 1.0 (current sum: ${total.toFixed(4)}).`);
         return;
       }
 
@@ -81,76 +75,56 @@ function App() {
   };
 
   const handleSubmit = async (e) => {
-  e.preventDefault();
-  setLoading(true);
-  setError('');
-  setResults(null);
+    e.preventDefault();
+    if (!csvFile) {
+      setError('Please select a CSV file.');
+      return;
+    }
 
-  try {
-    if (csvFile && csvPreview) {
+    setLoading(true);
+    setError('');
+    setResults(null);
+
+    try {
       const response = await molecularApi.calculate(null, csvFile);
       setResults(response.data);
       setInputData(csvPreview);
-    } else {
-      // Process manual input
-      const validRows = manualData.filter(row => 
-        row.massa !== '' && row.fracao !== ''
-      );
-
-      if (validRows.length === 0) {
-        throw new Error('Enter at least one valid data row.');
-      }
-
-      // ✅ Conversão explícita para número
-      const masses = validRows.map(row => {
-        const val = Number(row.massa);
-        if (isNaN(val) || val <= 0) throw new Error('Mass values must be positive numbers.');
-        return val;
-      });
-
-      const fracs = validRows.map(row => {
-        const val = Number(row.fracao);
-        if (isNaN(val) || val < 0) throw new Error('Fraction values must be non-negative numbers.');
-        return val;
-      });
-
-      if (masses.length !== fracs.length) {
-        throw new Error('Mass and fraction arrays must have the same length.');
-      }
-
-      const total = fracs.reduce((a, b) => a + b, 0);
-      if (Math.abs(total - 1.0) > 0.001) {
-        throw new Error(`Fractions must sum to 1.0 (current: ${total.toFixed(4)}).`);
-      }
-
-      // ✅ Envia como números
-      const jsonData = { masses, weight_fractions: fracs };
-      const response = await molecularApi.calculate(jsonData, null);
-      setResults(response.data);
-      setInputData({ masses, weight_fractions: fracs });
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Error processing file. Check format and try again.');
+    } finally {
+      setLoading(false);
     }
-  } catch (err) {
-    setError(err.message || 'An error occurred during calculation.');
-  } finally {
-    setLoading(false);
-  }
-};
+  };
+
   return (
     <div className="App">
       <header>
         <h1>Polymer Analysis Toolkit (PAT)</h1>
-        <p>Molecular Module — Calculate Mn, Mw, and Dispersity (Đ)</p>
+        <p className="subtitle">Molecular Weight Distribution Analyzer</p>
       </header>
 
       <main>
-        <form onSubmit={handleSubmit}>
-          <MolecularForm onManualDataChange={handleManualDataChange} />
-          <FileUploader onFileSelect={handleFileSelect} />
+        <div className="introduction">
+          <p>
+            PAT calculates key molecular properties from polymer characterization data:
+          </p>
+          <ul>
+            <li><strong>Mn</strong> — Number-average molecular weight</li>
+            <li><strong>Mw</strong> — Weight-average molecular weight</li>
+            <li><strong>Đ</strong> — Dispersity index (Mw/Mn)</li>
+          </ul>
+          <p>
+            <strong>Instructions:</strong> Upload a CSV file with two columns: 
+            <code>massa</code> (molecular weight in g/mol) and <code>fracao</code> (weight fraction). 
+            Fractions must sum to 1.0.
+          </p>
+        </div>
 
-          <button type="submit" disabled={loading} className="submit-btn">
+        <form onSubmit={handleSubmit}>
+          <FileUploader onFileSelect={handleFileSelect} />
+          <button type="submit" disabled={loading || !csvFile} className="submit-btn">
             {loading ? 'Calculating...' : 'Calculate Properties'}
           </button>
-
           {error && <div className="error-message">{error}</div>}
         </form>
 
