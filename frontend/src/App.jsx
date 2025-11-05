@@ -81,54 +81,60 @@ function App() {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-    setResults(null);
+  e.preventDefault();
+  setLoading(true);
+  setError('');
+  setResults(null);
 
-    try {
-      if (csvFile && csvPreview) {
-        const response = await molecularApi.calculate(null, csvFile);
-        setResults(response.data);
-        setInputData(csvPreview);
-      } else {
-        // Process manual input
-        const validRows = manualData.filter(row => 
-          row.massa !== '' && row.fracao !== '' &&
-          !isNaN(parseFloat(row.massa)) && !isNaN(parseFloat(row.fracao))
-        );
+  try {
+    if (csvFile && csvPreview) {
+      const response = await molecularApi.calculate(null, csvFile);
+      setResults(response.data);
+      setInputData(csvPreview);
+    } else {
+      // Process manual input
+      const validRows = manualData.filter(row => 
+        row.massa !== '' && row.fracao !== ''
+      );
 
-        if (validRows.length === 0) {
-          throw new Error('Enter at least one valid data row.');
-        }
-
-        const masses = validRows.map(row => parseFloat(row.massa));
-        const fracs = validRows.map(row => parseFloat(row.fracao));
-
-        if (masses.some(m => m <= 0)) {
-          throw new Error('Mass values must be positive.');
-        }
-        if (fracs.some(f => f < 0)) {
-          throw new Error('Fraction values must be non-negative.');
-        }
-
-        const total = fracs.reduce((a, b) => a + b, 0);
-        if (Math.abs(total - 1.0) > 0.001) {
-          throw new Error(`Fractions must sum to 1.0 (current: ${total.toFixed(4)}).`);
-        }
-
-        const jsonData = { masses, weight_fractions: fracs };
-        const response = await molecularApi.calculate(jsonData, null);
-        setResults(response.data);
-        setInputData({ masses, weight_fractions: fracs });
+      if (validRows.length === 0) {
+        throw new Error('Enter at least one valid data row.');
       }
-    } catch (err) {
-      setError(err.message || 'An error occurred during calculation.');
-    } finally {
-      setLoading(false);
-    }
-  };
 
+      // ✅ Conversão explícita para número
+      const masses = validRows.map(row => {
+        const val = Number(row.massa);
+        if (isNaN(val) || val <= 0) throw new Error('Mass values must be positive numbers.');
+        return val;
+      });
+
+      const fracs = validRows.map(row => {
+        const val = Number(row.fracao);
+        if (isNaN(val) || val < 0) throw new Error('Fraction values must be non-negative numbers.');
+        return val;
+      });
+
+      if (masses.length !== fracs.length) {
+        throw new Error('Mass and fraction arrays must have the same length.');
+      }
+
+      const total = fracs.reduce((a, b) => a + b, 0);
+      if (Math.abs(total - 1.0) > 0.001) {
+        throw new Error(`Fractions must sum to 1.0 (current: ${total.toFixed(4)}).`);
+      }
+
+      // ✅ Envia como números
+      const jsonData = { masses, weight_fractions: fracs };
+      const response = await molecularApi.calculate(jsonData, null);
+      setResults(response.data);
+      setInputData({ masses, weight_fractions: fracs });
+    }
+  } catch (err) {
+    setError(err.message || 'An error occurred during calculation.');
+  } finally {
+    setLoading(false);
+  }
+};
   return (
     <div className="App">
       <header>
