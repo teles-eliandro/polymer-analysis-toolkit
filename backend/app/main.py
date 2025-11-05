@@ -14,8 +14,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",            # dev local
-        "https://polymer-analysis-toolkit.vercel.app",  # substitua pelo seu domínio do Vercel!
-        "https://seu-frontend.vercel.app"   # ou use ["*"] temporariamente (não recomendado para produção)
+        "https://polymer-analysis-toolkit-dpwlj9509-eliandros-projects-c60477e2.vercel.app,  # substitua pelo seu domínio do Vercel!
+        "polymer-analysis-toolkit.vercel.app"   # ou use ["*"] temporariamente (não recomendado para produção)
     ],
     allow_credentials=True,
     allow_methods=["*"],
