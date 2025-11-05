@@ -6,7 +6,7 @@ import { molecularApi } from './services/api';
 import './App.css';
 
 function App() {
-  const [manualData, setManualData] = useState([]);
+  const [manualData, setManualData] = useState([{ massa: '', fracao: '' }]);
   const [csvFile, setCsvFile] = useState(null);
   const [csvPreview, setCsvPreview] = useState(null);
   const [results, setResults] = useState(null);
@@ -27,8 +27,13 @@ function App() {
       return;
     }
 
+    if (!file.name.endsWith('.csv')) {
+      alert('Please select a CSV file.');
+      return;
+    }
+
     setCsvFile(file);
-    setManualData([]);
+    setManualData([{ massa: '', fracao: '' }]);
 
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -36,12 +41,12 @@ function App() {
       const lines = text.split('\n').filter(line => line.trim() !== '');
       if (lines.length < 2) return;
 
-      const headers = lines[0].split(',').map(h => h.trim());
-      const massIndex = headers.findIndex(h => h.toLowerCase() === 'massa' || h.toLowerCase() === 'mass');
-      const fracIndex = headers.findIndex(h => h.toLowerCase() === 'fracao' || h.toLowerCase() === 'fraction');
+      const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+      const massIndex = headers.indexOf('massa');
+      const fracIndex = headers.indexOf('fracao');
 
       if (massIndex === -1 || fracIndex === -1) {
-        setError('CSV must contain "massa"/"mass" and "fracao"/"fraction" columns.');
+        setError('CSV must contain "massa" and "fracao" columns.');
         return;
       }
 
@@ -51,7 +56,7 @@ function App() {
         if (fields.length > Math.max(massIndex, fracIndex)) {
           const massa = parseFloat(fields[massIndex]);
           const fracao = parseFloat(fields[fracIndex]);
-          if (!isNaN(massa) && !isNaN(fracao)) {
+          if (!isNaN(massa) && !isNaN(fracao) && massa > 0 && fracao >= 0) {
             data.push({ massa, fracao });
           }
         }
@@ -64,6 +69,12 @@ function App() {
 
       const masses = data.map(d => d.massa);
       const fracs = data.map(d => d.fracao);
+      const total = fracs.reduce((a, b) => a + b, 0);
+      if (Math.abs(total - 1.0) > 0.001) {
+        setError(`CSV fractions sum to ${total.toFixed(4)} (must be 1.0).`);
+        return;
+      }
+
       setCsvPreview({ masses, weight_fractions: fracs });
     };
     reader.readAsText(file);
@@ -80,20 +91,26 @@ function App() {
         const response = await molecularApi.calculate(null, csvFile);
         setResults(response.data);
         setInputData(csvPreview);
-      } else if (manualData.length > 0) {
-        const validRows = manualData.filter(row => row.massa !== '' && row.fracao !== '');
-        if (validRows.length === 0) throw new Error('Enter at least one valid data row.');
+      } else {
+        // Process manual input
+        const validRows = manualData.filter(row => 
+          row.massa !== '' && row.fracao !== '' &&
+          !isNaN(parseFloat(row.massa)) && !isNaN(parseFloat(row.fracao))
+        );
 
-        const masses = validRows.map(r => {
-          const val = parseFloat(r.massa);
-          if (isNaN(val) || val <= 0) throw new Error('Mass values must be positive numbers.');
-          return val;
-        });
-        const fracs = validRows.map(r => {
-          const val = parseFloat(r.fracao);
-          if (isNaN(val) || val < 0) throw new Error('Fraction values must be non-negative numbers.');
-          return val;
-        });
+        if (validRows.length === 0) {
+          throw new Error('Enter at least one valid data row.');
+        }
+
+        const masses = validRows.map(row => parseFloat(row.massa));
+        const fracs = validRows.map(row => parseFloat(row.fracao));
+
+        if (masses.some(m => m <= 0)) {
+          throw new Error('Mass values must be positive.');
+        }
+        if (fracs.some(f => f < 0)) {
+          throw new Error('Fraction values must be non-negative.');
+        }
 
         const total = fracs.reduce((a, b) => a + b, 0);
         if (Math.abs(total - 1.0) > 0.001) {
@@ -104,11 +121,9 @@ function App() {
         const response = await molecularApi.calculate(jsonData, null);
         setResults(response.data);
         setInputData({ masses, weight_fractions: fracs });
-      } else {
-        throw new Error('Enter manual data or upload a CSV file.');
       }
     } catch (err) {
-      setError(err.response?.data?.detail || err.message || 'An unknown error occurred.');
+      setError(err.message || 'An error occurred during calculation.');
     } finally {
       setLoading(false);
     }
