@@ -27,9 +27,9 @@ const ResultsDisplay = ({ results, inputData }) => {
   ];
 
   const layout = {
-    title: 'Distribuição de Massa Molecular (Fração em Peso)',
-    xaxis: { title: 'Massa Molecular (g/mol)' },
-    yaxis: { title: 'Fração em Peso' },
+    title: 'Molecular Weight Distribution (Weight Fraction)',
+    xaxis: { title: 'Molecular Weight (g/mol)' },
+    yaxis: { title: 'Weight Fraction' },
     width: 600,
     height: 400,
     margin: { l: 60, r: 20, t: 60, b: 60 }
