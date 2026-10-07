@@ -2,89 +2,152 @@
 
 [![Démo en ligne](https://img.shields.io/badge/Démo-Vercel-000000?logo=vercel)](https://polymer-analysis-toolkit.vercel.app)
 [![Licence](https://img.shields.io/badge/Licence-MIT-blue)](LICENSE)
+[![CI](https://github.com/teles-eliandro/polymer-analysis-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/teles-eliandro/polymer-analysis-toolkit/actions/workflows/ci.yml)
 
-**Polymer Analysis Toolkit (PAT)** est une application web open source conçue pour aider les chercheurs, ingénieurs et étudiants en science des matériaux à analyser les propriétés moléculaires des polymères de manière simple, précise et accessible — **sans aucune connaissance en programmation**.
+**Polymer Analysis Toolkit (PAT)** is an open-source web application that helps
+researchers, engineers and students in materials science analyse the
+characterisation data they already collect — without writing any code.
 
-Le module initial (**Moléculaire**) permet de calculer automatiquement les grandeurs fondamentales de la caractérisation polymérique à partir d’un fichier CSV contenant les masses moléculaires et leurs fractions en poids.
+Five modules share one interface:
 
----
+| Module | Input | What it reports |
+|---|---|---|
+| **Molar mass** | GPC/SEC export or a distribution table | Mn, Mw, Mz, Mz+1, Đ, Mv |
+| **Thermal** | TGA or DSC trace | Td, residue, DTG peak; Tg, Tm, ΔHm, crystallinity |
+| **Mechanical** | Tensile stress–strain curve | E, yield, tensile strength, elongation, toughness |
+| **Rheology** | Frequency sweep (ω, G′, G″) | Crossover, plateau modulus, terminal slopes, gel test |
+| **Structure** | XRD pattern or FTIR spectrum | Peak indexing, d-spacings, crystallite size; band assignments |
 
-## 🔬 Fondements théoriques
-
-Les calculs sont basés sur les définitions classiques de la **chimie des polymères** et de la **caractérisation par chromatographie d’exclusion stérique (SEC/GPC)**.
-
-### 1. **Masse moyenne en nombre (Mn)**
-Représente la moyenne arithmétique pondérée par le **nombre de chaînes** :
-\[
-M_n = \frac{1}{\sum \left( \frac{w_i}{M_i} \right)}
-\]
-où :
-- \( M_i \) = masse moléculaire de la fraction \( i \)
-- \( w_i \) = fraction en **poids** de la fraction \( i \)
-
-> 💡 Cette formule est dérivée de la relation \( x_i = \frac{w_i / M_i}{\sum (w_j / M_j)} \), où \( x_i \) est la fraction molaire.
-
-### 2. **Masse moyenne en poids (Mw)**
-Pondère les masses par leur **contribution en masse** :
-\[
-M_w = \sum (w_i \cdot M_i)
-\]
-
-### 3. **Indice de dispersité (Đ)**
-Indicateur de **polydispersité** du polymère :
-\[
-Đ = \frac{M_w}{M_n}
-\]
-- \( Đ = 1 \) : polymère monodispersé (idéal, rare)
-- \( 1 < Đ < 1.2 \) : polymérisation contrôlée (ex: ATRP, RAFT)
-- \( Đ > 1.5 \) : polymérisation radicalaire non contrôlée
-
-> ✅ **Remarque** : PAT suppose que les fractions fournies sont des **fractions en poids** (comme c’est le cas dans les données brutes de GPC/SEC), ce qui est la convention expérimentale la plus courante.
+The interface is available in **English, Portuguese and Spanish**; the language
+is chosen in the header and remembered in the browser.
 
 ---
 
-## 🚀 Fonctionnalités (Module Moléculaire)
+## 🔬 Theoretical basis
 
-- ✅ **Upload de fichier CSV** avec colonnes `massa` et `fracao`
-- ✅ **Validation automatique** :
-  - Masses > 0
-  - Fractions ≥ 0
-  - Somme des fractions = 1.0 (±0.001)
-- ✅ **Calcul précis** de Mn, Mw et Đ
-- ✅ **Visualisation graphique** de la distribution (histogramme)
-- ✅ **Export des résultats** au format JSON
-- ✅ Interface entièrement en **anglais** (standard scientifique international)
-- ✅ Déploiement **sans serveur** (Vercel + Render)
+### Molecular averages
 
----
+Weight fractions `w_i` are the experimental convention in GPC/SEC raw data, and
+the module assumes them.
 
-## 🛠️ Technologies utilisées
+$$M_n = \frac{1}{\sum_i \left( w_i / M_i \right)} \qquad M_w = \sum_i w_i M_i \qquad Đ = \frac{M_w}{M_n}$$
 
-### Backend (API)
-- **Langage** : Python 3.11
-- **Framework** : [FastAPI](https://fastapi.tiangolo.com/) (API RESTful moderne, auto-documentée)
-- **Validation** : Pydantic
-- **Calculs** : NumPy, pandas
-- **Hébergement** : [Render](https://render.com)
+Higher moments follow the same weighting: `Mz = Σw_iM_i² / Σw_iM_i` and
+`Mz+1 = Σw_iM_i³ / Σw_iM_i²`. The viscosity average `Mv` needs the
+Mark–Houwink exponent `a` of the polymer–solvent pair; it is reported only when
+that exponent is supplied, because assuming one silently produces a wrong number.
 
-### Frontend (Interface utilisateur)
-- **Framework** : React.js
-- **Graphiques** : Plotly.js via `react-plotly.js`
-- **Requêtes HTTP** : Axios
-- **Hébergement** : [Vercel](https://vercel.app)
+### Method notes the interface states plainly
+
+- **Crystallinity from DSC** requires a reference enthalpy ΔH°m for a 100 %
+  crystalline sample. It is reported only when that value is given.
+- **Crystallite size from XRD** uses the Scherrer equation. The peak width is
+  converted to radians and instrumental broadening is removed in quadrature;
+  the shape factor K (default 0.9) is an input, not a hidden constant.
+- **The XRD crystallinity index is not an absolute degree of crystallinity.**
+  It is comparable only between samples measured with the same range, baseline
+  and slits. The interface says so next to the number.
+- **FTIR assignment is a functional-group lookup, not an identification.**
+  Many polymers share the same groups, and additives and moisture contribute
+  their own bands.
 
 ---
 
-## ▶️ Comment utiliser l’outil ?
+## 📊 Verification against published values
 
-1. Accédez à la version de production :  
-   👉 [https://polymer-analysis-toolkit.vercel.app](https://polymer-analysis-toolkit.vercel.app)
+The maths is checked against real, citable data — not only against internal
+consistency. Sources are downloaded by `scripts/fetch_reference_data.py`:
 
-2. Préparez un fichier CSV avec **exactement deux colonnes** :
-   ```csv
-   massa,fracao
-   1000,0.2
-   2000,0.5
-   5000,0.3
+| Source | Used for |
+|---|---|
+| [NIST IR 6091](https://doi.org/10.6028/nist.ir.6091) (open access) | Certified **Mw of SRM 706a** polystyrene, with its uncertainty |
+| [Zenodo 10.5281/zenodo.17306416](https://doi.org/10.5281/zenodo.17306416) (CC-BY-4.0) | GPC/SEC of PLA in THF — 10 samples with Mn, Mw, Mz, Mz+1 and the instrument's own uncertainties |
+| [Zenodo 10.5281/zenodo.17293641](https://doi.org/10.5281/zenodo.17293641) (CC-BY-4.0) | DSC of polycaprolactone, with its stated protocol |
 
+Reference files live in `.reference-data/`, which is **not** versioned (some are
+several MB and carry their own licences). Download them with:
 
+```bash
+python scripts/fetch_reference_data.py          # everything
+python scripts/fetch_reference_data.py --dsc    # only the DSC set
+```
+
+Tests that need those files **skip** cleanly when they are absent, so a fresh
+clone runs green without them.
+
+**What the tests establish, and what they do not.** Values reported by the
+instrument are checked against the module only after an internal-consistency
+gate: the published Mn/Mw/Mz/Mz+1 must be correctly ordered, and the published
+ratios Mw/Mn and Mz/Mn must reproduce from the published moments. Ten of ten
+sources passed that gate. On the eight samples whose tabulated range actually
+contains the reported value, the median deviation in Mw is **4.9 %**. Two
+samples are excluded by an explicit coverage rule applied before the results
+were inspected — their data range does not contain the reported value, so
+comparing against it would be meaningless.
+
+Cases that could not be verified are recorded as `xfail(strict=True)`: the
+build fails if one of them ever starts passing, which forces the claim to be
+revisited rather than quietly upgraded. Three are open — reproducing the
+*certified* NIST Mw (the certificate publishes only Mw, not the slice
+distribution), obtaining an independent Mv (needs a Mark–Houwink pair *and* a
+measured intrinsic viscosity from the same sample), and resolving the Tg of the
+semi-crystalline PCL sample (~55 % crystallinity leaves a small Cp step).
+
+---
+
+## 🚀 Running locally
+
+### Backend
+
+```bash
+cd backend
+python -m venv .venv
+.venv/bin/pip install -r requirements-dev.txt
+.venv/bin/uvicorn app.main:app --reload --port 8000
+```
+
+API documentation is served at `/docs`.
+
+### Frontend
+
+```bash
+cd frontend
+npm install
+REACT_APP_API_URL=http://localhost:8000 npm start
+```
+
+`REACT_APP_API_URL` is read **at build time**. If it is not set in production
+the app falls back to `http://localhost:8000` — the visitor's own machine — and
+logs a warning to the console. Always set it in the hosting environment.
+
+---
+
+## ✅ Tests
+
+```bash
+cd backend  && .venv/bin/python -m pytest     # 149 passed, 3 xfailed
+cd frontend && CI=true npx react-scripts test --watchAll=false   # 7 passed
+```
+
+Backend tests cover the API contract (JSON and multipart paths), each module's
+maths against synthetic cases with known answers, and the published-data checks
+described above. Frontend tests mount the real shell in jsdom, switch through
+the modules, and confirm that a result renders.
+
+---
+
+## 🛠️ Stack
+
+- **Backend** — Python 3.11, FastAPI, Pydantic, NumPy, pandas. Deployed on Render
+  (`render.yaml`; start command `cd backend && uvicorn app.main:app`).
+- **Frontend** — React 18 (Create React App), Plotly via `react-plotly.js`,
+  axios. Deployed on Vercel.
+- **CI** — GitHub Actions: ruff, pytest on Python 3.11 and 3.12, frontend build.
+
+---
+
+## 📄 Licence
+
+MIT.
+
+Developed by **Eliandro P. Teles**.

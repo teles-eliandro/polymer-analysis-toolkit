@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import Plot from 'react-plotly.js';
 import { rheologyApi, describeError } from '../services/api';
 import { useI18n } from '../i18n/I18nContext';
-import { Stat, StatGrid, ErrorBanner, parseTwoColumns } from './ui';
+import { Stat, StatGrid, ErrorBanner } from './ui';
 
 function parseThreeColumns(text) {
   const w = [];

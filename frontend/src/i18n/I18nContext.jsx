@@ -205,6 +205,12 @@ const MESSAGES = {
     'structure.assignments': 'Candidate assignments',
     'structure.pattern': 'Pattern',
     'structure.spectrum': 'Spectrum',
+    'structure.kFactor': 'Scherrer constant K',
+    'structure.kFactorHint':
+      'Shape factor in the Scherrer equation, typically 0.9 for spherical crystallites. Change it only if you know the crystallite habit.',
+    'structure.tolerance': 'Match tolerance (cm⁻¹)',
+    'structure.toleranceHint':
+      'How far a detected band may sit from a reference value and still be reported as a candidate. Zero means exact position only.',
     'structure.ftirWarning':
       'This is a functional-group lookup, not an identification. Many polymers share the same groups, and additives and moisture contribute their own bands. Confirm against a reference spectrum measured on the same instrument.',
 
@@ -398,6 +404,12 @@ const MESSAGES = {
     'structure.assignments': 'Atribuições candidatas',
     'structure.pattern': 'Difratograma',
     'structure.spectrum': 'Espectro',
+    'structure.kFactor': 'Constante de Scherrer K',
+    'structure.kFactorHint':
+      'Fator de forma na equação de Scherrer, tipicamente 0,9 para cristalitos esféricos. Altere apenas se conhecer o hábito do cristalito.',
+    'structure.tolerance': 'Tolerância de casamento (cm⁻¹)',
+    'structure.toleranceHint':
+      'O quanto uma banda detectada pode se afastar de um valor de referência e ainda ser relatada como candidata. Zero exige posição exata.',
     'structure.ftirWarning':
       'Isto é uma consulta de grupos funcionais, não uma identificação. Muitos polímeros compartilham os mesmos grupos, e aditivos e umidade contribuem com bandas próprias. Confirme contra um espectro de referência medido no mesmo instrumento.',
 
@@ -591,6 +603,12 @@ const MESSAGES = {
     'structure.assignments': 'Asignaciones candidatas',
     'structure.pattern': 'Difractograma',
     'structure.spectrum': 'Espectro',
+    'structure.kFactor': 'Constante de Scherrer K',
+    'structure.kFactorHint':
+      'Factor de forma en la ecuación de Scherrer, típicamente 0,9 para cristalitos esféricos. Cámbielo solo si conoce el hábito del cristalito.',
+    'structure.tolerance': 'Tolerancia de coincidencia (cm⁻¹)',
+    'structure.toleranceHint':
+      'Cuánto puede alejarse una banda detectada de un valor de referencia y seguir reportándose como candidata. Cero exige posición exacta.',
     'structure.ftirWarning':
       'Esto es una consulta de grupos funcionales, no una identificación. Muchos polímeros comparten los mismos grupos, y los aditivos y la humedad aportan sus propias bandas. Confirme contra un espectro de referencia medido en el mismo instrumento.',
 

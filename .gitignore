@@ -16,6 +16,8 @@ yarn-error.log*
 # Build
 /build
 /dist
+frontend/build/
+frontend/dist/
 
 # Test / tooling caches
 .pytest_cache/
