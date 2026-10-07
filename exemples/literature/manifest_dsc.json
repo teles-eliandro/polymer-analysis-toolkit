@@ -1,0 +1,35 @@
+[
+ {
+  "file": "DSC_PLLA_10K_2nd_heating.dat",
+  "sample": "PLLA_10K",
+  "mass_mg": 3.9,
+  "exotherm": "UP",
+  "T_start": -6.5,
+  "T_end": 188.0,
+  "points": 5883,
+  "heating_rate_C_min": 10.0,
+  "units": "temperature_C \\t heat_flow_W_per_g (endothermic up)"
+ },
+ {
+  "file": "DSC_PLLA_25K_2nd_heating.dat",
+  "sample": "PLLA_25K",
+  "mass_mg": 4.0,
+  "exotherm": "UP",
+  "T_start": -6.6,
+  "T_end": 188.0,
+  "points": 5882,
+  "heating_rate_C_min": 10.0,
+  "units": "temperature_C \\t heat_flow_W_per_g (endothermic up)"
+ },
+ {
+  "file": "DSC_PLLA_50K_2nd_heating.dat",
+  "sample": "PLLA_50K",
+  "mass_mg": 3.6,
+  "exotherm": "UP",
+  "T_start": -5.6,
+  "T_end": 198.1,
+  "points": 6153,
+  "heating_rate_C_min": 10.0,
+  "units": "temperature_C \\t heat_flow_W_per_g (endothermic up)"
+ }
+]

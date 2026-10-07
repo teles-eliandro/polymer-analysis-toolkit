@@ -1,0 +1,65 @@
+[
+ {
+  "file": "WAXS_film4-16_002.dat",
+  "points": 438,
+  "two_theta_range": [
+   5.0046,
+   40.8437
+  ],
+  "max_2theta": 21.2953
+ },
+ {
+  "file": "WAXS_film4-19_001.dat",
+  "points": 438,
+  "two_theta_range": [
+   5.0046,
+   40.8437
+  ],
+  "max_2theta": 21.2138
+ },
+ {
+  "file": "WAXS_film4-16_002.dat",
+  "points": 438,
+  "two_theta_range": [
+   5.0062,
+   40.8572
+  ],
+  "max_2theta": 21.3836
+ },
+ {
+  "file": "WAXS_film4-19_001.dat",
+  "points": 438,
+  "two_theta_range": [
+   5.0062,
+   40.8572
+  ],
+  "max_2theta": 21.5466
+ },
+ {
+  "file": "WAXS_film4-20_001.dat",
+  "points": 438,
+  "two_theta_range": [
+   5.0062,
+   40.8572
+  ],
+  "max_2theta": 21.5466
+ },
+ {
+  "file": "WAXS_film4-23_001.dat",
+  "points": 438,
+  "two_theta_range": [
+   5.0062,
+   40.8572
+  ],
+  "max_2theta": 21.3021
+ },
+ {
+  "file": "WAXS_film4-24_001.dat",
+  "points": 438,
+  "two_theta_range": [
+   5.0062,
+   40.8572
+  ],
+  "max_2theta": 15.4611
+ }
+]

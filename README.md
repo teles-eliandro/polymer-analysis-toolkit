@@ -54,7 +54,6 @@ that exponent is supplied, because assuming one silently produces a wrong number
 ---
 
 ## 📊 Verification against published values
-
 The maths is checked against real, citable data — not only against internal
 consistency. Sources are downloaded by `scripts/fetch_reference_data.py`:
 
@@ -92,6 +91,22 @@ revisited rather than quietly upgraded. Three are open — reproducing the
 distribution), obtaining an independent Mv (needs a Mark–Houwink pair *and* a
 measured intrinsic viscosity from the same sample), and resolving the Tg of the
 semi-crystalline PCL sample (~55 % crystallinity leaves a small Cp step).
+
+### Ready-to-use real data
+
+`exemples/literature/` holds extracts of the real measurements, converted only
+in units so the panels can read them — no values altered, smoothed or
+regenerated:
+
+| Files | Module | What it is |
+|---|---|---|
+| `WAXS_film4-*.dat` | Structure → XRD | 5 WAXS patterns of PLA/PE films, in 2θ with λ = 1.541 Å |
+| `DSC_PLLA_*K_2nd_heating.dat` | Thermal → DSC | 3 PLLA second-heating scans at 10 °C/min |
+
+Paste a file's contents into the matching panel and compare against the
+documented expectations in `exemples/literature/README.md`. Two of these files
+are what exposed both bugs described above, so they make a good first check
+that a deployment is working.
 
 ---
 
