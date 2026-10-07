@@ -54,8 +54,10 @@ class XRDResult:
     peaks_two_theta: list[float] = field(default_factory=list)
     #: Interplanar spacing d = lambda / (2 sin theta), in angstrom.
     d_spacing_angstrom: list[float] = field(default_factory=list)
-    #: Crystallite size per peak from the Scherrer equation, in nm.
-    crystallite_size_nm: list[float | None] = field(default_factory=list)
+    #: Crystallite size per peak from the Scherrer equation, in nm. Peaks with
+    #: no measurable width are dropped rather than reported as None, so this
+    #: stays parallel with peaks_two_theta.
+    crystallite_size_nm: list[float] = field(default_factory=list)
     #: Integral breadth of each peak (FWHM before correction), in degrees.
     fwhm_deg: list[float] = field(default_factory=list)
     #: Crystallinity index from the ratio of crystalline to total integrated
@@ -267,7 +269,7 @@ def analyse_xrd(
     peaks = _find_peaks(x, y, prominence_frac)
     peak_positions: list[float] = []
     d_spacings: list[float] = []
-    sizes: list[float | None] = []
+    sizes: list[float] = []
     fwhms: list[float] = []
 
     # Total integrated intensity over the measured range, after a linear
@@ -279,23 +281,34 @@ def analyse_xrd(
     peak_area = 0.0
     for idx in peaks:
         tw = float(x[idx])
-        peak_positions.append(tw)
         theta = math.radians(tw / 2.0)
         s = math.sin(theta)
-        d = wavelength_angstrom / (2.0 * s) if s > 0 else float("nan")
-        d_spacings.append(float(d) if math.isfinite(d) else float("nan"))
+        # A peak that cannot be converted to a d-spacing or does not have a
+        # measurable width is dropped rather than reported as NaN. NaN is not
+        # valid JSON, so emitting it crashed the endpoint with a 500 the moment
+        # real instrument data arrived: traces from a Nika/DIFFRAC export carry
+        # many narrow spikes whose width falls below the sampling interval.
+        # Keeping the arrays parallel and shorter is the honest representation.
+        if s <= 0:
+            continue
+        d = wavelength_angstrom / (2.0 * s)
+        if not math.isfinite(d):
+            continue
 
         fw = _fwhm_at(x, y, idx)
-        if fw is None:
-            fwhms.append(float("nan"))
-            sizes.append(None)
+        if fw is None or not math.isfinite(fw) or fw <= 0:
             continue
-        fwhms.append(fw)
-        sizes.append(
-            scherrer_crystallite_size(
-                tw, fw, wavelength_angstrom, K, instrumental_fwhm_deg
-            )
+
+        size = scherrer_crystallite_size(
+            tw, fw, wavelength_angstrom, K, instrumental_fwhm_deg
         )
+        if size is None or not math.isfinite(size):
+            continue
+
+        peak_positions.append(tw)
+        d_spacings.append(float(d))
+        fwhms.append(float(fw))
+        sizes.append(float(size))
 
         # Area of this peak: integrate the excess above a local baseline
         # halfway down to the neighbouring minima.
@@ -312,7 +325,19 @@ def analyse_xrd(
 
     crystallinity = None
     if total_area > 0 and peak_area > 0:
-        crystallinity = float(min(100.0, 100.0 * peak_area / total_area))
+        raw_fraction = 100.0 * peak_area / total_area
+        # If the straight-line baseline sits below every measured point, the
+        # whole pattern counts as crystalline and the index saturates at 100 %.
+        # That happens on data whose amorphous halo decays steeply with angle
+        # (a q-space profile on an arbitrary-units scale, where the intensity
+        # falls by half across the range): a chord baseline cuts through the
+        # halo instead of following it, and the index stops being meaningful.
+        # Reported as None rather than 100 %, because a saturated index is not
+        # a measurement of anything - the amorphous reference is missing.
+        if raw_fraction >= 99.9 and int(np.sum(y < base)) == 0:
+            crystallinity = None
+        else:
+            crystallinity = float(min(100.0, raw_fraction))
 
     return XRDResult(
         peaks_two_theta=peak_positions,
