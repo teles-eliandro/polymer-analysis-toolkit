@@ -11,3 +11,11 @@ pydantic==2.10.4
 python-multipart==0.0.20
 numpy>=1.26,<3
 pandas>=2.2,<3
+
+# Test-only. `starlette.testclient` imports httpx at collection time, so
+# without it three test modules fail to collect and the suite looks broken
+# on a fresh clone. It is listed here rather than in a separate
+# requirements-dev.txt because there is no dev/runtime split to maintain:
+# the API has no test-only runtime import.
+httpx>=0.27,<0.29
+pytest>=8,<9
