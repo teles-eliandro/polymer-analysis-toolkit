@@ -150,6 +150,28 @@ def _clean_curve(
     return xa[order], ya[order]
 
 
+def _uniform_grid(
+    T: np.ndarray, m: np.ndarray, step_c: float = 1.0
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Resample a trace onto a uniform temperature grid before differentiating.
+
+    Instrument exports are unevenly spaced (here, intervals from 0.008 to
+    0.29 degC), and a finite difference on an uneven axis is dominated by the
+    short intervals: one noisy pair a hundredth of a degree apart yields a
+    gradient of tens of percent per degree. Resampling to a fixed step makes
+    the derivative comparable along the trace, at the cost of the resolution
+    below ``step_c``, which a TGA cannot meaningfully resolve anyway.
+    """
+    if T.size < 2:
+        return T, m
+    step = max(float(step_c), (T[-1] - T[0]) / max(m.size - 1, 1))
+    grid = np.arange(T[0], T[-1] + step * 0.5, step)
+    if grid.size < 2:
+        return T, m
+    return grid, np.interp(grid, T, m)
+
+
 def _smooth(y: np.ndarray, window: int) -> np.ndarray:
     """Moving-average smoothing with reflective padding to keep the length."""
     if window <= 1:
@@ -400,6 +422,54 @@ def inflection_temperature(
     return float(xa[int(np.argmax(dy))])
 
 
+def _monotonic_temperature(
+    T: np.ndarray, m: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Force a strictly increasing temperature axis by sorting and averaging.
+
+    Instrument exports are not monotonic in temperature: the furnace holds or
+    overshoots, so the same set-point appears many times, and the trace can
+    dip backwards. Dropping every non-increasing point deletes the rising
+    limbs of a non-monotonic trace, which distorts the mass curve, and it does
+    not even guarantee monotonicity afterwards. Averaging the samples that
+    share a temperature keeps the mass information and makes the derivative
+    finite, because the interval can no longer be zero.
+    """
+    order = np.argsort(T, kind="stable")
+    T, m = T[order], m[order]
+    # Group identical temperatures without assuming a fixed spacing.
+    boundaries = np.flatnonzero(np.diff(T) != 0)
+    starts = np.concatenate(([0], boundaries + 1))
+    ends = np.concatenate((boundaries + 1, [T.size]))
+    T_out = T[starts]
+    m_out = np.array([m[a:b].mean() for a, b in zip(starts, ends, strict=True)])
+    return T_out, m_out
+
+
+def _dtg_peak_temperature(T: np.ndarray, dtg: np.ndarray) -> float | None:
+    """
+    Temperature of the tallest DTG peak, excluding the run boundaries.
+
+    The mass trace is flat once the ramp ends, so any residual gradient there
+    is noise rather than decomposition. Reporting it would name the end of the
+    scan as the decomposition temperature — an artefact that looks plausible
+    because it lands in a real temperature range. The first and last 2 % of
+    the trace are therefore excluded from the peak search.
+    """
+    if dtg.size == 0:
+        return None
+    finite = np.isfinite(dtg)
+    if not finite.any():
+        return None
+    margin = max(1, int(round(dtg.size * 0.02)))
+    lo, hi = min(margin, dtg.size - 1), max(dtg.size - margin, 1)
+    segment = dtg[lo:hi]
+    if segment.size == 0:
+        return None
+    return float(T[lo + int(np.argmax(segment))])
+
+
 def analyse_tga(
     temperature: Sequence[float],
     mass_pct: Sequence[float],
@@ -414,23 +484,24 @@ def analyse_tga(
     whose mass loss exceeds ``min_step_pct``.
     """
     T, m = _clean_curve(temperature, mass_pct, "temperature", "mass_pct")
-    if np.any(np.diff(T) <= 0):
-        # Duplicate temperature points are legal in instrument exports; keep
-        # the first occurrence so the derivative stays finite.
-        keep = np.concatenate(([True], np.diff(T) > 0))
-        T, m = T[keep], m[keep]
+    T, m = _monotonic_temperature(T, m)
     if T.size < 3:
         raise ValueError("The TGA trace needs at least 3 distinct temperatures.")
 
     m_smooth = _smooth(m, smooth_window)
-    # DTG in %/degC: rate of mass loss, reported positive for a loss.
-    dtg = -np.gradient(m_smooth, T)
+    # DTG in %/degC: rate of mass loss, reported positive for a loss. The
+    # derivative is taken on a uniform grid because the instrument's own
+    # spacing is uneven, and non-finite values are forced to zero because
+    # np.argmax returns the position of a NaN rather than the maximum.
+    T_u, m_u = _uniform_grid(T, m_smooth)
+    dtg_u = -np.gradient(m_u, T_u)
+    dtg_u = np.where(np.isfinite(dtg_u), dtg_u, 0.0)
+    dtg = np.interp(T, T_u, dtg_u)
 
     Td5 = _temperature_at_fraction(T, m_smooth, 5.0)
     Td10 = _temperature_at_fraction(T, m_smooth, 10.0)
     T95 = _temperature_at_fraction(T, m_smooth, 95.0)
-    idx_peak = int(np.argmax(dtg))
-    T_peak = float(T[idx_peak]) if dtg.size else None
+    T_peak = _dtg_peak_temperature(T_u, dtg_u)
     residue = float(m_smooth[-1])
 
     # Detect discrete steps as contiguous regions where the mass falls by
