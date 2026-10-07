@@ -168,7 +168,9 @@ describe('PAT application shell', () => {
     expect(y).toHaveLength(12);
 
     await waitFor(() => {
-      expect(screen.getByText(/Crystallinity index/i)).toBeInTheDocument();
+      // The label legitimately appears twice now: once as the result stat and
+      // once as the formula/model entry, so an exact single match is wrong.
+      expect(screen.getAllByText(/Crystallinity index/i).length).toBeGreaterThan(0);
     });
     expect(screen.getAllByText(/2.16/).length).toBeGreaterThan(0);
     expect(screen.getByTestId('plot')).toBeInTheDocument();

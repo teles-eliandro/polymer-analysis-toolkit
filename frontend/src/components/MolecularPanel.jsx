@@ -11,6 +11,7 @@ import Plot from 'react-plotly.js';
 import { molecularApi, describeError } from '../services/api';
 import { useI18n, formatNumber } from '../i18n/I18nContext';
 import { Stat, StatGrid, Disclosure, ErrorBanner } from './ui';
+import { Formula, FormulaDisclosure } from './Formula';
 
 const MOLECULAR_KEYS = [
   ['Mn', 'molecular.Mn', 'molecular.MnNote'],
@@ -378,6 +379,56 @@ export default function MolecularPanel() {
           ) : null}
         </section>
       ) : null}
+
+      <FormulaDisclosure>
+        <Formula
+          name={t('mol.f.mn.name')}
+          expression="Mn = sum(Ni Mi) / sum(Ni)      Mw = sum(Ni Mi^2) / sum(Ni Mi)"
+          symbols={[
+            { symbol: 'Ni', meaning: t('mol.f.mn.Ni') },
+            { symbol: 'Mi', meaning: t('mol.f.mn.Mi') },
+          ]}
+          note={t('mol.f.mn.note')}
+          reference="IUPAC, Compendium of Macromolecular Nomenclature (1991), recommendations on molecular weight distributions. Also ASTM D5296-19 for GPC/SEC of polystyrene."
+        />
+        <Formula
+          name={t('mol.f.pdi.name')}
+          expression="D = Mw / Mn   (dispersity, formerly polydispersity index)"
+          note={t('mol.f.pdi.note')}
+          reference="IUPAC recommends the term dispersity and the symbol D. A value below 1 is not a narrow distribution but an error in the data or the calculation."
+        />
+        <Formula
+          name={t('mol.f.mz.name')}
+          expression="Mz = sum(Ni Mi^3) / sum(Ni Mi^2)"
+          note={t('mol.f.mz.note')}
+          reference="The z-average is weighted towards the heaviest chains, so it responds to a high-mass tail that Mw barely registers."
+        />
+        <Formula
+          name={t('mol.f.mh.name')}
+          expression="[eta] = K Mv^a      (Mark-Houwink-Sakurada)"
+          symbols={[
+            { symbol: 'Mv', meaning: t('mol.f.mh.Mv') },
+            { symbol: 'K', meaning: t('mol.f.mh.K') },
+            { symbol: 'a', meaning: t('mol.f.mh.a') },
+          ]}
+          note={t('mol.f.mh.note')}
+          reference="Mark-Houwink-Sakurada relation; K and a are tabulated per polymer-solvent-temperature combination in the Polymer Handbook. They are not universal constants."
+        />
+        <Formula
+          name={t('mol.f.gpc.name')}
+          expression="log M = f(elution volume)   calibrated against narrow standards"
+          note={t('mol.f.gpc.note')}
+          reference="Conventional GPC calibration assumes the sample and the standards have the same hydrodynamic volume at a given elution volume. Reporting the result as absolute molar mass without a light-scattering or viscometry detector overstates what the measurement supports."
+        />
+        <Formula
+          name={t('mol.f.log.name')}
+          expression={
+            "w(log M) = (1 / (M sigma sqrt(2 pi))) exp( -(ln M - mu)^2 / (2 sigma^2) )"
+          }
+          note={t('mol.f.log.note')}
+          reference="Schulz-Zimm and log-normal distributions are the usual models for a SEC trace; the log-normal is used here because its Mw/Mn follows directly from sigma."
+        />
+      </FormulaDisclosure>
     </div>
   );
 }

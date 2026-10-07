@@ -5,6 +5,8 @@ import Plot from 'react-plotly.js';
 import { thermalApi, describeError } from '../services/api';
 import { useI18n } from '../i18n/I18nContext';
 import { Stat, StatGrid, DataTable, ErrorBanner, parseTwoColumns } from './ui';
+import FileDrop from './FileDrop';
+import { Formula, FormulaDisclosure } from './Formula';
 
 function TraceInput({ label, hint, placeholder, value, onChange }) {
   return (
@@ -33,6 +35,34 @@ export default function ThermalPanel() {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [fileNote, setFileNote] = useState('');
+
+  /**
+   * A file fills the same textarea the paste box uses, so the two routes
+   * cannot drift apart: whatever the parser accepts by hand, it accepts from
+   * a file. Nothing is uploaded here — only the parsed numbers reach the API.
+   */
+  const loadFile = (text, file) => {
+    setError('');
+    setFileNote('');
+    if (!file) {
+      if (mode === 'tga') setTgaText('');
+      else setDscText('');
+      return;
+    }
+    const { x, y } = parseTwoColumns(text);
+    if (x.length === 0) {
+      setError(t('file.noPoints', { name: file.name }));
+      return;
+    }
+    const rebuilt = x.map((v, i) => `${v}\t${y[i]}`).join('\n');
+    if (mode === 'tga') setTgaText(rebuilt);
+    else setDscText(rebuilt);
+    setFileNote(
+      t('file.loaded', { name: file.name, n: x.length }) +
+        (x.length < 10 ? ` ${t('thermal.shortTraceWarning')}` : ''),
+    );
+  };
 
   const run = async () => {
     setError('');
@@ -98,6 +128,16 @@ export default function ThermalPanel() {
       </div>
 
       <div className="card">
+        <FileDrop
+          onText={loadFile}
+          onError={setError}
+          hint={t('file.accepted', { list: 'CSV, TSV, TXT, DAT, ASC' })}
+        />
+        {fileNote ? (
+          <p className="preview-meta" role="status">
+            {fileNote}
+          </p>
+        ) : null}
         {mode === 'tga' ? (
           <TraceInput
             label={`${t('thermal.temperature')} / ${t('thermal.massPct')}`}
@@ -154,6 +194,67 @@ export default function ThermalPanel() {
 
       {result?.kind === 'tga' ? <TgaResults data={result.data} t={t} /> : null}
       {result?.kind === 'dsc' ? <DscResults data={result.data} t={t} /> : null}
+
+      <FormulaDisclosure>
+        <Formula
+          name={t('thermal.f.dtg.name')}
+          expression="DTG(T) = −dm/dT   (%/°C)"
+          symbols={[
+            { symbol: 'm', meaning: t('thermal.f.dtg.m') },
+            { symbol: 'T', meaning: t('thermal.f.dtg.T') },
+          ]}
+          note={t('thermal.f.dtg.note')}
+          reference="ASTM E1131-20, Standard Test Method for Compositional Analysis by Thermogravimetry. The DTG is the first derivative of the mass loss curve; its maximum is the temperature of greatest decomposition rate."
+        />
+        <Formula
+          name={t('thermal.f.td.name')}
+          expression="Td(x%) : the T where m(T) = 100 − x   (linear interpolation)"
+          symbols={[
+            { symbol: 'x', meaning: t('thermal.f.td.x') },
+            { symbol: 'm', meaning: t('thermal.f.td.m') },
+          ]}
+          note={t('thermal.f.td.note')}
+          reference="ISO 11358-1:2022, Plastics — Thermogravimetry (TG) of polymers — Part 1: General principles. Defines the onset temperature by the mass-loss criterion and the extrapolated tangent."
+        />
+        <Formula
+          name={t('thermal.f.res.name')}
+          expression="residue (%) = m(T_final)"
+          note={t('thermal.f.res.note')}
+          reference="ISO 11358-1:2022 (residue determination). The residue includes any inorganic filler, ash or char, so it is an upper bound on the filler content, not a measurement of it."
+        />
+        <Formula
+          name={t('thermal.f.smooth.name')}
+          expression="m_smooth(T) = (1/w) Σ m(T_i)   over a window of w points, edge-padded"
+          symbols={[{ symbol: 'w', meaning: t('thermal.f.smooth.w') }]}
+          note={t('thermal.f.smooth.note')}
+        />
+        <Formula
+          name={t('thermal.f.uniform.name')}
+          expression="DTG computed on a uniform 1 °C grid after interpolation"
+          note={t('thermal.f.uniform.note')}
+        />
+        <Formula
+          name={t('thermal.f.dscpeak.name')}
+          expression="ΔHm = (1/β) ∫ [q(T) − baseline(T)] dT"
+          symbols={[
+            { symbol: 'ΔHm', meaning: t('thermal.f.dscpeak.Hm') },
+            { symbol: 'q', meaning: t('thermal.f.dscpeak.q') },
+            { symbol: 'β', meaning: t('thermal.f.dscpeak.beta') },
+          ]}
+          note={t('thermal.f.dscpeak.note')}
+          reference="ASTM E793-06(2018), Standard Test Method for Enthalpies of Fusion and Crystallization by DSC. The peak area is bounded by a baseline drawn between the flanks of the transition."
+        />
+        <Formula
+          name={t('thermal.f.xc.name')}
+          expression="Xc (%) = 100 · ΔHm / ΔHm°"
+          symbols={[
+            { symbol: 'ΔHm', meaning: t('thermal.f.xc.Hm') },
+            { symbol: 'ΔHm°', meaning: t('thermal.f.xc.Hm0') },
+          ]}
+          note={t('thermal.f.xc.note')}
+          reference="Kong & Hay, 'The measurement of the crystallinity of polymers by DSC', Polymer 43 (2002) 3873–3878. Xc from DSC is a mass fraction, and is only as good as ΔHm°."
+        />
+      </FormulaDisclosure>
     </div>
   );
 }
