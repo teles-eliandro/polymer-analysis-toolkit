@@ -1,11 +1,27 @@
+# Render blueprint for the PAT API.
+#
+# The previous version of this file pointed the start command at
+# `backend.app.main:app` while also setting PYTHONPATH to `backend`. Only one
+# of those can be right: with PYTHONPATH=/opt/render/project/src/backend the
+# app package is importable as `app`, not as `backend.app`. The service never
+# came up. The start command below matches the PYTHONPATH that is set, and is
+# the same invocation used locally and in CI.
 
-    # render.yaml
 services:
   - type: web
     name: pat-backend
-    runtime: python-3.11.10  # 👈 força Python 3.11 (evita erro do pandas no 3.13)
-    buildCommand: "pip install -r backend/requirements.txt"
-    startCommand: "uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT"
+    runtime: python
+    plan: free
+    region: oregon
+    branch: main
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
     envVars:
-      - key: PYTHONPATH
-        value: /opt/render/project/src/backend
+      - key: PYTHON_VERSION
+        value: "3.11.10"
+      # Comma-separated list of origins allowed to call this API from a
+      # browser. Set this to the deployed frontend origin. The pattern for
+      # Vercel preview deployments is allowed by the regex in app/main.py.
+      - key: PAT_ALLOWED_ORIGINS
+        value: https://polymer-analysis-toolkit.vercel.app

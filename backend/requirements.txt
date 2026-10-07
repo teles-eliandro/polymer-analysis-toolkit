@@ -1,7 +1,13 @@
-fastapi[all]
-uvicorn
-pydantic==2.9.2
-pandas>=2.0.0
-numpy>=1.24.0
-python-multipart==0.0.17
-pytest==8.3.3
+# Runtime dependencies for the PAT API.
+#
+# Pinned to the versions the test suite was verified against. FastAPI and
+# Starlette change their request-binding behaviour between minor releases,
+# and the dual JSON/multipart endpoint depends on that behaviour, so the
+# pins are intentional rather than lazy.
+
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+python-multipart==0.0.20
+numpy>=1.26,<3
+pandas>=2.2,<3

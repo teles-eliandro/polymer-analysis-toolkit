@@ -1,13 +1,11 @@
-
----
-
-### 📄 `.gitignore`
-```gitignore
-# Python
 __pycache__/
 *.pyc
+*.pyo
 venv/
+.venv/
+env/
 .env
+.env.local
 
 # Node
 node_modules/
@@ -18,9 +16,25 @@ yarn-error.log*
 # Build
 /build
 /dist
+frontend/build/
+frontend/dist/
+
+# Test / tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
 
 # IDE
 .vscode/
 .idea/
 *.swp
 .DS_Store
+
+# Local data
+*.db
+*.sqlite3
+
+# Dados de referência baixados (não versionados: alguns MB, licença própria)
+.reference-data/
