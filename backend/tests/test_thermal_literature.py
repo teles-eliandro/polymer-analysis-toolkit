@@ -212,7 +212,8 @@ def test_melting_enthalpy_is_physically_possible():
     a corda entre as duas pontas da varredura, a entalpia saía a 340 J/g
     contra um máximo físico de 139.5 J/g — impossível, e portanto sinal claro
     de que a linha de base estava errada. Com a baseline ajustada nos flancos
-    da transição, o valor cai para 82.7 J/g, plausível.
+    da transição, o valor cai para 86.2 J/g (Xc ≈ 61.8 %), plausível e estável
+    entre smooth_window de 5 a 21.
 
     Um valor acima do máximo físico tem de falhar aqui, não passar
     despercebido.

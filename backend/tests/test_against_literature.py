@@ -229,7 +229,10 @@ def test_reported_values_are_internally_consistent():
             assert mw / mn == pytest.approx(f["Mw/Mn"], rel=0.02), rec["report"]
         if f.get("Mz/Mn"):
             assert mz / mn == pytest.approx(f["Mz/Mn"], rel=0.02), rec["report"]
-    assert checked >= 8, f"esperava ao menos 8 relatórios com os quatro momentos, achei {checked}"
+    assert checked == 10, (
+        f"esperava os 10 relatórios com os quatro momentos, achei {checked}; "
+        "se o conjunto mudou, a afirmação de 10/10 na documentação tem de ser revista"
+    )
 
 
 @needs_data
