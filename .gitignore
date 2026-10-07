@@ -33,3 +33,6 @@ htmlcov/
 # Local data
 *.db
 *.sqlite3
+
+# Dados de referência baixados (não versionados: alguns MB, licença própria)
+.reference-data/
