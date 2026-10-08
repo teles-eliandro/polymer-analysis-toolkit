@@ -48,6 +48,8 @@ async def tga_endpoint(payload: TGATraceInput) -> TGAResult:
         T_95pct=r.T_95pct,
         residue_pct=r.residue_pct,
         steps=[TGAStep(**s) for s in r.steps],
+        unattributed_loss_pct=r.unattributed_loss_pct,
+        notes=r.notes,
         temperature=r.temperature,
         mass_pct=r.mass_pct,
         dtg=r.dtg,
