@@ -104,6 +104,8 @@ async def dsc_endpoint(payload: DSCTraceInput) -> DSCResult:
         Tc=r.Tc,
         delta_Hc=r.delta_Hc,
         crystallinity_pct=r.crystallinity_pct,
+        Tg_uncertainty_C=r.Tg_uncertainty_C,
+        Tg_reliable=r.Tg_reliable,
         temperature=r.temperature,
         heat_flow=r.heat_flow,
         direction=r.direction,

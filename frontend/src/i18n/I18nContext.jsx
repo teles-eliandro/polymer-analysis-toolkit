@@ -186,6 +186,8 @@ const MESSAGES = {
     'thermal.residue': 'Residue',
     'thermal.steps': 'Decomposition steps',
     'thermal.Tg': 'Glass transition',
+    'thermal.reliable': 'stable on resampling',
+    'thermal.notReliable': 'UNSTABLE - do not quote without repeats',
     'thermal.TgNote':
       'ASTM D3418 midpoint. A single heating scan carries the sample history; a heat-cool-heat cycle read on the second heating is more reliable.',
     'thermal.Tm': 'Melting point',
@@ -535,6 +537,8 @@ const MESSAGES = {
     'thermal.residue': 'Resíduo',
     'thermal.steps': 'Etapas de decomposição',
     'thermal.Tg': 'Transição vítrea',
+    'thermal.reliable': 'estável ao reamostrar',
+    'thermal.notReliable': 'INSTÁVEL - não cite sem repetições',
     'thermal.TgNote':
       'Ponto médio ASTM D3418. Uma única varredura carrega a história térmica; o ciclo aquece-resfria-aquece lido no segundo aquecimento é mais confiável.',
     'thermal.Tm': 'Ponto de fusão',
@@ -885,6 +889,8 @@ const MESSAGES = {
     'thermal.residue': 'Residuo',
     'thermal.steps': 'Etapas de descomposición',
     'thermal.Tg': 'Transición vítrea',
+    'thermal.reliable': 'estable al remuestrear',
+    'thermal.notReliable': 'INESTABLE - no citar sin repeticiones',
     'thermal.TgNote':
       'Punto medio ASTM D3418. Un único calentamiento arrastra la historia térmica; el ciclo calienta-enfría-calienta leído en el segundo calentamiento es más fiable.',
     'thermal.Tm': 'Punto de fusión',

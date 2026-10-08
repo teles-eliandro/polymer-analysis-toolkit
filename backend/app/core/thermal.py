@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Sequence
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -45,6 +46,20 @@ __all__ = [
 #: deliberately conservative floor: it rejects curvature on a melt-only trace
 #: while accepting every Tg that would be visible to an analyst.
 _MIN_TG_STEP_FRACTION = 0.03
+
+#: Half-width, in kelvin, within which a reported glass transition is treated
+#: as stable enough to quote. Between laboratories, DSC Tg values for the same
+#: polymer commonly scatter by several degrees, so demanding better than this
+#: would flag good data; and the resampling spread measured on the real ABS
+#: trace at realistic noise is 7-14 K, which must be flagged. 2.5 K sits below
+#: the scatter between operators and well under that failure mode.
+_TG_RELIABLE_TOLERANCE_C = 2.5
+
+#: Set while _tg_footing re-runs the analysis. The footing cannot be computed
+#: inside its own resamples -- the call recurses without bound -- so the work
+#: is switched off for the duration. A ContextVar rather than a plain flag so
+#: concurrent analyses do not see each other's state.
+_no_footing: ContextVar[bool] = ContextVar("_no_footing", default=False)
 
 #: How symmetric the slopes either side of a candidate must be for it to count
 #: as a step rather than the flank of a peak. A glass transition changes the
@@ -164,6 +179,15 @@ class DSCResult:
     #: Degree of crystallinity in percent, if a 100 % crystalline reference
     #: enthalpy was supplied.
     crystallinity_pct: float | None
+    #: How much the reported Tg moves when the trace is resampled, in K. This
+    #: is the method's own sensitivity to the sampling of *this* trace -- not
+    #: an accuracy claim against a certified reference, which would need one.
+    #: None when no Tg was found.
+    Tg_uncertainty_C: float | None = None
+    #: True when Tg is stable to better than Tg_RELIABLE_TOLERANCE_C. A
+    #: researcher should treat a False value as "not publishable as a number"
+    #: and go back to the instrument, not as a slightly worse value.
+    Tg_reliable: bool | None = None
     #: Curve data for plotting.
     temperature: list[float] = field(default_factory=list)
     heat_flow: list[float] = field(default_factory=list)
@@ -181,6 +205,8 @@ class DSCResult:
             "Tc": self.Tc,
             "delta_Hc": self.delta_Hc,
             "crystallinity_pct": self.crystallinity_pct,
+            "Tg_uncertainty_C": self.Tg_uncertainty_C,
+            "Tg_reliable": self.Tg_reliable,
             "temperature": self.temperature,
             "heat_flow": self.heat_flow,
             "direction": self.direction,
@@ -1138,4 +1164,74 @@ def analyse_dsc(
             pre_lvl, post_lvl = _plateau_levels(T, hf_s, tg_idx, width)
             result.delta_cp = abs(post_lvl - pre_lvl) / (heating_rate / 60.0)
 
+    # ---- How much should this Tg be trusted? -------------------------------
+    # A bare number with no footing is the most dangerous thing a tool can hand
+    # a researcher: on a real ABS trace (figshare 24462004) noise at the level
+    # an instrument actually carries moves the reported Tg by 7-14 K, and
+    # nothing in the result said so. Resampling the trace and re-running the
+    # detection measures the method's sensitivity to the sampling of *this*
+    # data. It is not an accuracy claim -- that needs a certified reference --
+    # but it is the part that can be known from the data in hand.
+    if result.Tg is not None and not _no_footing.get():
+        result.Tg_uncertainty_C = _tg_footing(T, hf, heating_rate)
+        result.Tg_reliable = (
+            result.Tg_uncertainty_C is not None
+            and result.Tg_uncertainty_C <= _TG_RELIABLE_TOLERANCE_C
+        )
+
     return result
+
+
+def _tg_footing(
+    T: np.ndarray,
+    hf: np.ndarray,
+    heating_rate: float | None,
+    repeats: int = 12,
+    seed: int = 0,
+) -> float | None:
+    """
+    Spread of the reported Tg when the trace is resampled.
+
+    Bootstrap over the points: the same measurement, re-drawn. If the answer
+    barely moves, the detection is founded on the shape of the data; if it
+    swings, it is founded on which points happened to be sampled and should
+    not be quoted. Returns the upper half-width in kelvin, or None when too
+    few resamples produced a Tg to say anything.
+
+    The resamples run with the footing switched off (see _no_footing); the
+    call is recursive otherwise, since each resample would compute a footing of
+    its own, and twelve resamples of twelve resamples is not a measurement
+    anyone is waiting for.
+    """
+    n = T.size
+    if n < 20:
+        return None
+
+    rng = np.random.default_rng(seed)
+    found: list[float] = []
+    for _ in range(repeats):
+        idx = np.sort(rng.integers(0, n, n))
+        Tb = T[idx]
+        # A resample can repeat a temperature; interpolation-free detection
+        # needs a strictly usable axis.
+        keep = np.concatenate(([True], np.diff(Tb) > 0))
+        Tb, hb = Tb[keep], hf[idx][keep]
+        if Tb.size < 20:
+            continue
+        token = _no_footing.set(True)
+        try:
+            r = analyse_dsc(list(Tb), list(hb), heating_rate=heating_rate)
+        except (ValueError, IndexError):
+            continue
+        finally:
+            _no_footing.reset(token)
+        if r.Tg is not None:
+            found.append(float(r.Tg))
+
+    if len(found) < 4:
+        return None
+    # Half the central spread: a robust width that one wild resample cannot
+    # inflate, which matters because a single bad resample is exactly the
+    # failure being measured.
+    lo, hi = np.percentile(found, [10.0, 90.0])
+    return float((hi - lo) / 2.0)

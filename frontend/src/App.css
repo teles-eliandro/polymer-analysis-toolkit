@@ -1087,3 +1087,16 @@ footer a {
     display: block !important;
   }
 }
+
+/* The footing under a research value: how much to trust the number above.
+   Kept small and adjacent, and coloured only when it is bad news. */
+.stat-footing {
+  margin-top: 2px;
+  font-size: 0.78rem;
+  color: var(--text-muted, #6b7280);
+}
+
+.stat-footing.warn {
+  color: #b45309;
+  font-weight: 600;
+}

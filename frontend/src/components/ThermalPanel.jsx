@@ -434,6 +434,14 @@ function DscResults({ data, t }) {
           value={data.Tg}
           unit="°C"
           note={t('thermal.TgNote')}
+          footing={
+            data.Tg_uncertainty_C
+              ? `±${Number(data.Tg_uncertainty_C).toFixed(1)} °C · ${
+                  data.Tg_reliable ? t('thermal.reliable') : t('thermal.notReliable')
+                }`
+              : null
+          }
+          footingWarning={data.Tg_reliable === false}
         />
         <Stat label={t('thermal.Tm')} value={data.Tm} unit="°C" />
         <Stat label={t('thermal.deltaHm')} value={data.delta_Hm} unit="J/g" />

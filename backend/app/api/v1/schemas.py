@@ -149,6 +149,22 @@ class DSCResult(BaseModel):
     crystallinity_pct: float | None = Field(
         None, description="Degree of crystallinity, percent. Requires ref_enthalpy_J_g."
     )
+    Tg_uncertainty_C: float | None = Field(
+        None,
+        description=(
+            "Half-width, in kelvin, of how much the reported Tg moves when the "
+            "trace is resampled. Measures the detection's sensitivity to the "
+            "sampling of this trace; it is not an accuracy claim against a "
+            "certified reference. Null when no Tg was found."
+        ),
+    )
+    Tg_reliable: bool | None = Field(
+        None,
+        description=(
+            "True when Tg is stable on resampling. False means the value should "
+            "not be quoted without repeat runs, not that it is slightly worse."
+        ),
+    )
     temperature: list[float]
     heat_flow: list[float]
     direction: str

@@ -6,7 +6,7 @@ import { useI18n, formatNumber } from '../i18n/I18nContext';
 import { buildZip, dataUrlToBytes, toCsv } from '../services/zip';
 
 /** A single labelled result value, with an optional explanatory note. */
-export function Stat({ label, value, unit, note, raw }) {
+export function Stat({ label, value, unit, note, raw, footing, footingWarning }) {
   const display =
     raw !== undefined && raw !== null && typeof raw !== 'number'
       ? raw
@@ -18,6 +18,12 @@ export function Stat({ label, value, unit, note, raw }) {
         {display}
         {unit ? <span className="stat-unit">{unit}</span> : null}
       </div>
+      {footing ? (
+        // How much to trust the number above. Deliberately next to the value
+        // rather than in a footnote: a research value without its footing is
+        // the thing that gets misquoted later.
+        <div className={footingWarning ? 'stat-footing warn' : 'stat-footing'}>{footing}</div>
+      ) : null}
       {note ? <div className="stat-note">{note}</div> : null}
     </div>
   );
