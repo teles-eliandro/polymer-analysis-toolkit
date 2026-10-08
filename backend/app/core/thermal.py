@@ -348,6 +348,22 @@ def _find_step_temperature(
     of a window before it is large relative to the local noise, whereas for a
     peak those two means are similar because the signal returns.
 
+    Two details matter on a real trace, both learned from a DSC scan of ABS
+    (figshare 10.6084/m9.figshare.24462004) whose glass transition is at
+    105.8 C but which was originally reported as having no Tg at all:
+
+    * The search skips the first and last 5 % of the scan. A DSC run opens
+      with the cell still settling, and that transient is the largest
+      level-change anywhere in the trace -- on the ABS scan it is larger than
+      the glass transition itself. Left in, it is always chosen.
+    * Candidates are ranked by the size of the step, not by step over noise.
+      Ranking by step/noise picks the flattest region of the trace, where the
+      noise is smallest and a negligible step therefore scores highest: on the
+      ABS scan it selected 46.6 C (step 0.000075) over the real transition at
+      105.8 C (step 0.000171, 2.3x larger). The noise term then rejected it as
+      too small a fraction of the signal, and the routine returned None. Noise
+      belongs as a significance floor, not in the denominator.
+
     ``exclude`` optionally removes a temperature range (the melting region)
     from consideration.
     """
@@ -356,17 +372,18 @@ def _find_step_temperature(
         return None
 
     win = max(5, int(0.03 * n))
+    # Skip the settling transient at each end of the scan.
+    margin = max(win, int(0.05 * n))
     scores = np.full(n, -np.inf)
     for i in range(win, n - win):
+        if i < margin or i > n - margin:
+            continue
         t_i = float(T[i])
         if exclude is not None and exclude[0] <= t_i <= exclude[1]:
             continue
         before = float(np.mean(y[i - win : i]))
         after = float(np.mean(y[i : i + win]))
-        step = abs(after - before)
-        local = y[max(0, i - 2 * win) : min(n, i + 2 * win)]
-        noise = float(np.std(np.diff(local))) if local.size > 2 else 0.0
-        scores[i] = step / (noise + 1e-12)
+        scores[i] = abs(after - before)
 
     if not np.any(np.isfinite(scores)):
         return None
@@ -501,6 +518,27 @@ _STEP_PROMINENCE = 0.15
 #: Two regions closer than this many degrees are the same event interrupted by
 #: a noise crossing, so they are joined.
 _STEP_MERGE_GAP_C = 15.0
+
+# A note on what this deliberately does not attempt: decomposing a shoulder.
+#
+# A blend such as PLA/PHA shows a faint early loss (the PHA, 6.7 % over
+# 200-300 C) sitting on the rising flank of the main decomposition (the PLA,
+# 88.3 % over 300-400 C). There is no valley between them -- the rate never
+# falls -- so no threshold separates them, and that is a property of the
+# signal, not of the threshold. Measured on the real PLA/PHA trace from
+# Zenodo 10.5281/zenodo.18940798, using the instrument's own derivative column
+# as well as a re-derived one: a single region at every threshold from 0.08 to
+# 0.25.
+#
+# Fitting two sigmoids to recover the shoulder was tried and rejected. It fits
+# better than one (RMS 0.41 against 0.90) but the split it reports is not
+# stable and does not match the physical composition: from four starting
+# guesses it returned first-step losses of 9.8 %, 15.6 %, 21.2 % and 40.3 %
+# against a true 6.7 %, and the guess with the best RMS gave the worst answer.
+# Two free sigmoids describing one peak is overfitting, and shipping it would
+# put a confident, wrong composition in a report. The shoulder is therefore
+# reported inside the step it belongs to, with a note naming the early loss --
+# see the single-step branch in `analyse_tga`.
 
 
 def _first_mass_change(mass: np.ndarray, T: np.ndarray, before: int) -> int:
