@@ -192,6 +192,21 @@ const MESSAGES = {
       'Uses the reference enthalpy supplied above. A value above 100 % means the reference does not match the sample.',
     'thermal.trace': 'Trace',
     'thermal.dtg': 'Derivative',
+    'thermal.modeQuestion': 'Which analysis will run?',
+    'thermal.modeTgaWhat': 'Mass loss vs temperature. Gives Td, the DTG peak and residue.',
+    'thermal.modeDscWhat':
+      'Heat flow vs temperature. Gives Tg, Tm, melting enthalpy and crystallinity.',
+    'thermal.activeMode': 'Active: {mode}',
+    'thermal.runsAs': 'Your data will be analysed as a {mode} trace.',
+    'thermal.runsAsTga':
+      'Your data will be analysed as a TGA trace: the second column is read as mass remaining (%).',
+    'thermal.runsAsDsc':
+      'Your data will be analysed as a DSC trace: the second column is read as heat flow (W/g).',
+    'thermal.switchWarn':
+      'You have data loaded for {from}. Switching to {to} will not analyse it.',
+    'thermal.clear': 'Clear',
+    'thermal.clearHint': 'Empties the current trace and any result.',
+    'thermal.cleared': 'Cleared.',
 
     'mechanical.title': 'Tensile properties',
     'mechanical.intro':
@@ -522,6 +537,22 @@ const MESSAGES = {
       'Usa a entalpia de referência informada acima. Valor acima de 100 % significa que a referência não corresponde à amostra.',
     'thermal.trace': 'Curva',
     'thermal.dtg': 'Derivada',
+    'thermal.modeQuestion': 'Qual análise será executada?',
+    'thermal.modeTgaWhat':
+      'Perda de massa em função da temperatura. Fornece Td, o pico de DTG e o resíduo.',
+    'thermal.modeDscWhat':
+      'Fluxo de calor em função da temperatura. Fornece Tg, Tm, entalpia de fusão e cristalinidade.',
+    'thermal.activeMode': 'Ativo: {mode}',
+    'thermal.runsAs': 'Seus dados serão analisados como uma curva {mode}.',
+    'thermal.runsAsTga':
+      'Seus dados serão analisados como uma curva TGA: a segunda coluna é lida como massa restante (%).',
+    'thermal.runsAsDsc':
+      'Seus dados serão analisados como uma curva DSC: a segunda coluna é lida como fluxo de calor (W/g).',
+    'thermal.switchWarn':
+      'Você tem dados carregados para {from}. Trocar para {to} não os analisará.',
+    'thermal.clear': 'Limpar',
+    'thermal.clearHint': 'Esvazia a curva atual e qualquer resultado.',
+    'thermal.cleared': 'Limpo.',
 
     'mechanical.title': 'Propriedades de tração',
     'mechanical.intro':
@@ -852,6 +883,22 @@ const MESSAGES = {
       'Usa la entalpía de referencia indicada arriba. Un valor por encima de 100 % significa que la referencia no corresponde a la muestra.',
     'thermal.trace': 'Curva',
     'thermal.dtg': 'Derivada',
+    'thermal.modeQuestion': '¿Qué análisis se ejecutará?',
+    'thermal.modeTgaWhat':
+      'Pérdida de masa frente a temperatura. Proporciona Td, el pico de DTG y el residuo.',
+    'thermal.modeDscWhat':
+      'Flujo de calor frente a temperatura. Proporciona Tg, Tm, entalpía de fusión y cristalinidad.',
+    'thermal.activeMode': 'Activo: {mode}',
+    'thermal.runsAs': 'Sus datos se analizarán como una curva {mode}.',
+    'thermal.runsAsTga':
+      'Sus datos se analizarán como una curva TGA: la segunda columna se lee como masa restante (%).',
+    'thermal.runsAsDsc':
+      'Sus datos se analizarán como una curva DSC: la segunda columna se lee como flujo de calor (W/g).',
+    'thermal.switchWarn':
+      'Tiene datos cargados para {from}. Cambiar a {to} no los analizará.',
+    'thermal.clear': 'Limpiar',
+    'thermal.clearHint': 'Vacía la curva actual y cualquier resultado.',
+    'thermal.cleared': 'Limpiado.',
 
     'mechanical.title': 'Propiedades de tracción',
     'mechanical.intro':

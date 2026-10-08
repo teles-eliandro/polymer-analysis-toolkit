@@ -276,6 +276,51 @@ def _local_baseline(T: np.ndarray, y: np.ndarray, peak_idx: int) -> np.ndarray:
     return baseline
 
 
+def _plateau_levels(
+    T: np.ndarray, y: np.ndarray, tg_idx: int, width: float
+) -> tuple[float, float]:
+    """
+    Levels of the two plateaus that flank a transition, used to measure the
+    step height across it.
+
+    The step must be read between the plateaus *adjacent* to the transition,
+    not between the ends of the scan. Averaging the outer tenths of a scan
+    includes whatever slope and instrument drift the trace carries: on a
+    synthetic step of exactly 0.5 W/g carrying a linear drift of only
+    0.0009 W/g/K, the end-to-end method returned 2.47 J/(g.K) against a true
+    1.5 -- a 65 % error caused entirely by the drift, since the baseline at
+    0 C and at 400 C are not the same level.
+
+    ``width`` is the half-width of the window in degrees, taken from the
+    measured width of the transition itself so that a narrow transition gets
+    narrow windows and a broad one gets wide ones.
+    """
+    n = T.size
+    span = float(T[-1] - T[0])
+    if span <= 0:
+        return float(y[0]), float(y[-1])
+
+    # Keep each plateau window inside the scan but clear of the transition.
+    gap = max(width, 0.02 * span)
+    half = max(width, 0.03 * span)
+    t0, t1 = float(T[0]), float(T[-1])
+    t_tg = float(T[tg_idx])
+
+    lo_hi = t_tg - gap
+    lo_lo = max(t0, lo_hi - half)
+    hi_lo = t_tg + gap
+    hi_hi = min(t1, hi_lo + half)
+
+    lo_mask = (T >= lo_lo) & (T <= lo_hi)
+    hi_mask = (T >= hi_lo) & (T <= hi_hi)
+    if not lo_mask.any() or not hi_mask.any():
+        return float(y[0]), float(y[-1])
+
+    pre = float(np.mean(y[lo_mask]))
+    post = float(np.mean(y[hi_mask]))
+    return pre, post
+
+
 def onset_temperature(
     x, y, rising: bool = True, frac: float = 0.5
 ) -> float | None:
@@ -426,6 +471,24 @@ def _find_peak_temperature(T: np.ndarray, y: np.ndarray) -> int | None:
     # integration.
     chord = np.linspace(float(y[0]), float(y[-1]), n)
     rough = int(np.argmax(y - chord))
+
+    # A chord residual is positive over a large part of a *monotonic* trace,
+    # because the chord cuts below the curve wherever the latter is convex --
+    # which is most of the range for a step. On a purely amorphous polymer
+    # (atactic polystyrene, 10 K/min, 30-180 C: a glass transition and no
+    # melting endotherm whatsoever) this made the argmax land on the descending
+    # shoulder of the glass transition, and a "melting enthalpy" of 2.7 J/g was
+    # integrated from a region containing no peak at all.
+    #
+    # The shape that separates the two is the slope at the candidate. A real
+    # melting endotherm is still *rising* at the temperature reported as its
+    # maximum -- the apex is found where the residual stops increasing -- while
+    # the monotonic false positive sits on a part of the curve that is already
+    # falling. A flat or descending slope there means the candidate is a
+    # shoulder, not a peak.
+    slope = float(np.gradient(y, T)[rough])
+    if slope <= 0.0 and (y[rough] - chord[rough]) > 0.0:
+        return None
 
     # Second pass: re-locate using a baseline fitted away from the transition.
     baseline = _local_baseline(T, y, rough)
@@ -932,6 +995,22 @@ def analyse_dsc(
             result.Tg = t_g_step
 
         if heating_rate:
-            result.delta_cp = (post - pre) / (heating_rate / 60.0)
+            # Measure the step between the plateaus flanking the transition.
+            # Reading it from the ends of the scan instead folds the baseline
+            # slope into the result, and on a falling signal (an exothermic-up
+            # instrument) it also produced a *negative* delta_cp. The heat
+            # capacity change across a glass transition is positive by
+            # definition -- the liquid has a higher cp than the glass -- so the
+            # reported value is the magnitude of the step over the rate.
+            #
+            # The window is sized from the measured width of the transition
+            # itself (onset to end), so a narrow transition gets narrow
+            # windows and a broad one gets wide ones.
+            if result.Tg_onset is not None and result.Tg_end is not None:
+                width = abs(result.Tg_end - result.Tg_onset)
+            else:
+                width = 0.05 * float(T[-1] - T[0])
+            pre_lvl, post_lvl = _plateau_levels(T, hf_s, tg_idx, width)
+            result.delta_cp = abs(post_lvl - pre_lvl) / (heating_rate / 60.0)
 
     return result

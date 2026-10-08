@@ -275,3 +275,91 @@ def test_dsc_endpoint():
 def test_tga_endpoint_rejects_mismatched_lengths():
     r = client.post("/api/v1/thermal/tga", json={"temperature": [1, 2, 3], "mass_pct": [1, 2]})
     assert r.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# Amorphous traces and the sign of delta_cp.
+#
+# Both of these come from a real DSC scan of atactic polystyrene (pure PS,
+# 8.45 mg, 10 K/min, 30-180 C), which is an amorphous polymer. It has a glass
+# transition at ~100 C and no melting endotherm at all -- and that combination
+# is what exposed the two bugs below.
+# ---------------------------------------------------------------------------
+
+
+def _amorphous_ps_like():
+    """
+    A trace with the shape of the real polystyrene scan: a glass transition,
+    no melting peak, and a monotonic downward drift in the raw signal (the
+    instrument's exothermic-up convention), scanned well past Tg.
+
+    The key property is that there is *no* event that returns to the baseline.
+    """
+    T = np.linspace(30, 180, 300)
+    step = -0.037 / (1 + np.exp(-(T - 100) / 5.0))
+    drift = -0.133 - 0.0004 * (T - 30)
+    return T, drift + step
+
+
+def test_dsc_monotonic_amorphous_trace_has_no_melting_peak():
+    """
+    An amorphous polymer cannot melt, so a monotonic trace must report no Tm.
+
+    This is the bug the real polystyrene scan exposed: the peak search took
+    the residual against the end-to-end chord, which on a monotonic trace is
+    positive over a large part of the range. The argmax landed on the shoulder
+    of the glass transition and a "melting enthalpy" of 2.7 J/g was integrated
+    from it. Nothing in that trace is a melting endotherm.
+    """
+    T, hf = _amorphous_ps_like()
+    r = analyse_dsc(T, hf, heating_rate=10.0)
+    assert r.Tm is None, f"reported a spurious melting peak at {r.Tm} C"
+    assert r.delta_Hm is None, f"reported a spurious melting enthalpy {r.delta_Hm} J/g"
+
+
+def test_dsc_a_real_melting_peak_is_still_found():
+    """
+    The guard that rejects a monotonic trace must not reject a genuine
+    endotherm. A real melting peak is a transient excursion that returns to
+    the baseline, unlike the amorphous false positive.
+    """
+    T = np.linspace(30, 220, 1900)
+    hf = -0.10 + 0.02 / (1 + np.exp(-(T - 100) / 5.0)) + 1.5 * np.exp(
+        -0.5 * ((T - 165) / 5.0) ** 2
+    )
+    r = analyse_dsc(T, hf, heating_rate=10.0)
+    assert r.Tm == pytest.approx(165.0, abs=3.0)
+    assert r.delta_Hm is not None and r.delta_Hm > 5.0
+
+
+def test_dsc_delta_cp_is_positive_on_a_falling_step():
+    """
+    delta_cp is the heat-capacity change across a glass transition, so it is
+    positive by definition -- it cannot depend on the instrument's sign
+    convention. This trace steps *down* (exothermic-up instrument), which is
+    exactly the case that used to report a negative value.
+
+    A 0.5 W/g step at 20 K/min is 0.5/(20/60) = 1.5 J/(g.K).
+    """
+    T = np.linspace(0, 200, 2000)
+    hf = 0.9 - 0.5 / (1 + np.exp(-(T - 100) / 3.0))
+    r = analyse_dsc(T, hf, heating_rate=20.0)
+    assert r.delta_cp is not None
+    assert r.delta_cp > 0.0, f"delta_cp = {r.delta_cp} is negative, which is unphysical"
+    assert r.delta_cp == pytest.approx(1.5, rel=0.15)
+
+
+def test_dsc_delta_cp_ignores_baseline_drift_far_from_tg():
+    """
+    The step must be measured between the plateaus adjacent to the transition,
+    not between the ends of the scan. Here a strong linear drift is added on
+    top of the 0.5 W/g step: if the analyser averages the first and last 10 %
+    of the scan instead, the drift is mistaken for part of the step and the
+    value comes out far too large.
+    """
+    T = np.linspace(0, 400, 4000)
+    step = 0.5 / (1 + np.exp(-(T - 200) / 4.0))
+    drift = 0.0009 * (T - 200)
+    r = analyse_dsc(T, drift + step, heating_rate=20.0)
+    assert r.delta_cp == pytest.approx(1.5, rel=0.2)
+

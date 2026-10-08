@@ -37,6 +37,10 @@ export default function ThermalPanel() {
   const [error, setError] = useState('');
   const [fileNote, setFileNote] = useState('');
 
+  const isTga = mode === 'tga';
+  const modeLabel = isTga ? t('thermal.tga') : t('thermal.dsc');
+  const currentText = isTga ? tgaText : dscText;
+
   /**
    * A file fills the same textarea the paste box uses, so the two routes
    * cannot drift apart: whatever the parser accepts by hand, it accepts from
@@ -46,7 +50,7 @@ export default function ThermalPanel() {
     setError('');
     setFileNote('');
     if (!file) {
-      if (mode === 'tga') setTgaText('');
+      if (isTga) setTgaText('');
       else setDscText('');
       return;
     }
@@ -56,7 +60,7 @@ export default function ThermalPanel() {
       return;
     }
     const rebuilt = x.map((v, i) => `${v}\t${y[i]}`).join('\n');
-    if (mode === 'tga') setTgaText(rebuilt);
+    if (isTga) setTgaText(rebuilt);
     else setDscText(rebuilt);
     setFileNote(
       t('file.loaded', { name: file.name, n: x.length }) +
@@ -64,10 +68,38 @@ export default function ThermalPanel() {
     );
   };
 
+  /**
+   * Wipe the active trace and any result. Both the textarea and the plot go,
+   * so the panel is back to its initial state in one click — a half-cleared
+   * panel that still shows a stale plot is worse than no clear button.
+   */
+  const clear = () => {
+    if (isTga) setTgaText('');
+    else setDscText('');
+    setResult(null);
+    setError('');
+    setFileNote(t('thermal.cleared'));
+  };
+
+  /**
+   * Switching mode does not carry data across: a mass curve and a heat-flow
+   * curve are not interchangeable, so the warning is explicit rather than
+   * silently reinterpreting the other box's contents.
+   */
+  const switchMode = (next) => {
+    if (next === mode) return;
+    setMode(next);
+    setResult(null);
+    setError('');
+    setFileNote('');
+  };
+
+  const hasData = parseTwoColumns(currentText).x.length > 0;
+
   const run = async () => {
     setError('');
     setResult(null);
-    const text = mode === 'tga' ? tgaText : dscText;
+    const text = currentText;
     const { x, y } = parseTwoColumns(text);
     const minPoints = 3;
     if (x.length < minPoints || y.length < minPoints) {
@@ -80,7 +112,7 @@ export default function ThermalPanel() {
     }
     setLoading(true);
     try {
-      if (mode === 'tga') {
+      if (isTga) {
         const res = await thermalApi.tga(x, y);
         setResult({ kind: 'tga', data: res.data });
       } else {
@@ -102,32 +134,38 @@ export default function ThermalPanel() {
       <h2>{t('thermal.title')}</h2>
       <p className="intro">{t('thermal.intro')}</p>
 
-      <div className="tabs">
-        <button
-          type="button"
-          className={mode === 'tga' ? 'tab active' : 'tab'}
-          onClick={() => {
-            setMode('tga');
-            setResult(null);
-            setError('');
-          }}
-        >
-          {t('thermal.tga')}
-        </button>
-        <button
-          type="button"
-          className={mode === 'dsc' ? 'tab active' : 'tab'}
-          onClick={() => {
-            setMode('dsc');
-            setResult(null);
-            setError('');
-          }}
-        >
-          {t('thermal.dsc')}
-        </button>
+      <div className="mode-picker">
+        <span className="field-label">{t('thermal.modeQuestion')}</span>
+        <div className="tabs" role="tablist">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={isTga}
+            className={isTga ? 'tab active' : 'tab'}
+            onClick={() => switchMode('tga')}
+          >
+            {t('thermal.tga')}
+            <small className="tab-sub">{t('thermal.modeTgaWhat')}</small>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={!isTga}
+            className={!isTga ? 'tab active' : 'tab'}
+            onClick={() => switchMode('dsc')}
+          >
+            {t('thermal.dsc')}
+            <small className="tab-sub">{t('thermal.modeDscWhat')}</small>
+          </button>
+        </div>
       </div>
 
       <div className="card">
+        <p className={isTga ? 'mode-banner' : 'mode-banner dsc'}>
+          <strong>{t('thermal.activeMode', { mode: modeLabel })}</strong>
+          <span> — {isTga ? t('thermal.runsAsTga') : t('thermal.runsAsDsc')}</span>
+        </p>
+
         <FileDrop
           onText={loadFile}
           onError={setError}
@@ -138,7 +176,7 @@ export default function ThermalPanel() {
             {fileNote}
           </p>
         ) : null}
-        {mode === 'tga' ? (
+        {isTga ? (
           <TraceInput
             label={`${t('thermal.temperature')} / ${t('thermal.massPct')}`}
             hint="One row per point: temperature mass_percent. Comma, tab or space separated."
@@ -185,9 +223,22 @@ export default function ThermalPanel() {
           </>
         )}
 
-        <button type="button" className="submit-btn" disabled={loading} onClick={run}>
-          {loading ? t('common.calculating') : t('common.calculate')}
-        </button>
+        <div className="action-row">
+          <button type="button" className="submit-btn" disabled={loading} onClick={run}>
+            {loading
+              ? t('common.calculating')
+              : `${t('common.calculate')} (${modeLabel})`}
+          </button>
+          <button
+            type="button"
+            className="clear-btn"
+            onClick={clear}
+            disabled={loading || (!hasData && !result && !error)}
+            title={t('thermal.clearHint')}
+          >
+            {t('thermal.clear')}
+          </button>
+        </div>
       </div>
 
       <ErrorBanner message={error} />
