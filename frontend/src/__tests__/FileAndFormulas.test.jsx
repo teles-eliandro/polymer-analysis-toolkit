@@ -56,6 +56,50 @@ describe('FileDrop', () => {
     expect(messages.some((m) => m.includes('.raw'))).toBe(true);
     expect(onText).not.toHaveBeenCalled();
   });
+
+  test('upload mode hands the File object over without reading it', async () => {
+    // The molar-mass importer runs on the server and sniffs the vendor
+    // convention from the bytes, so the browser must not pre-parse the file.
+    const onFile = jest.fn();
+    renderWithI18n(<FileDrop onFile={onFile} onError={jest.fn()} />);
+
+    const input = document.querySelector('input[type="file"]');
+    const file = new File(['massa;fracao\n1000;0,2\n'], 'export.csv', { type: 'text/csv' });
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() => expect(onFile).toHaveBeenCalledTimes(1));
+    expect(onFile.mock.calls[0][0]).toBe(file);
+  });
+
+  test('upload mode accepts extensions the text mode refuses', async () => {
+    const onFile = jest.fn();
+    const onError = jest.fn();
+    renderWithI18n(<FileDrop onFile={onFile} onError={onError} />);
+
+    const input = document.querySelector('input[type="file"]');
+    const file = new File(['1\t2\n'], 'report.prn', { type: 'text/plain' });
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() => expect(onFile).toHaveBeenCalled());
+    expect(onError.mock.calls.map((c) => c[0]).filter(Boolean)).toHaveLength(0);
+  });
+
+  test('upload mode still refuses a format the importer cannot read', async () => {
+    const onFile = jest.fn();
+    const onError = jest.fn();
+    renderWithI18n(<FileDrop onFile={onFile} onError={onError} />);
+
+    const input = document.querySelector('input[type="file"]');
+    const file = new File([new Uint8Array([1, 2, 3])], 'scan.xlsx', {
+      type: 'application/vnd.ms-excel',
+    });
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() => expect(onError).toHaveBeenCalled());
+    const messages = onError.mock.calls.map((c) => c[0]).filter(Boolean);
+    expect(messages.some((m) => m.includes('.xlsx'))).toBe(true);
+    expect(onFile).not.toHaveBeenCalled();
+  });
 });
 
 describe('formula disclosure', () => {

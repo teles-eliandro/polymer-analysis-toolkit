@@ -246,11 +246,50 @@ def _to_float(text: str) -> float | None:
 
 
 def _detect_delimiter(sample_lines: Sequence[str]) -> str:
-    """Sniff the delimiter; falls back to whitespace."""
+    """
+    Sniff the delimiter; falls back to whitespace.
+
+    Counting raw separators is not enough: in a pt-BR/fr/de export a comma is
+    also the decimal separator, so ``1000,0;0,05`` contains two commas and one
+    semicolon per row and a naive count picks comma. Commas that sit between
+    two digits are therefore discounted before scoring, which leaves the real
+    column delimiter with the higher score. The same reasoning applies to a
+    semicolon used as a decimal separator (unusual, but it costs nothing).
+    """
+
+    def is_decimal_separator(line: str, m: re.Match) -> bool:
+        """
+        True when the separator at ``m`` is a decimal point, not a delimiter.
+
+        A decimal comma is flanked by digits, is followed by one or two more
+        digits, and then the field ends -- end of line, or the next delimiter.
+        ``1000,0`` and ``0,05`` qualify. ``1.0e3,1200`` does not (four digits
+        follow), and neither does ``1000,0.2`` where the text after the comma
+        starts a new number rather than finishing this one. Both of those are
+        comma-delimited fields, and misreading them loses the whole file.
+        """
+        if not (m.start() > 0 and m.end() < len(line)):
+            return False
+        if not (line[m.start() - 1].isdigit() and line[m.end()].isdigit()):
+            return False
+        tail = re.match(r"(\d+)", line[m.end():])
+        digits_after = len(tail.group(1)) if tail else 0
+        if not 1 <= digits_after <= 2:
+            return False
+        rest = line[m.end() + digits_after:]
+        # The field must end here: anything else means the comma separated
+        # fields and the digits after it belong to the next value.
+        return not rest or rest[0] in ",;\t|"
+
+    def count_separators(line: str, delim: str) -> int:
+        if delim in {",", ";"}:
+            return sum(1 for m in re.finditer(re.escape(delim), line) if not is_decimal_separator(line, m))
+        return line.count(delim)
+
     candidates = [",", ";", "\t", "|"]
-    best, best_score = ",", -1
+    best, best_score = None, -1
     for delim in candidates:
-        counts = [line.count(delim) for line in sample_lines if line.strip()]
+        counts = [count_separators(line, delim) for line in sample_lines if line.strip()]
         if not counts:
             continue
         non_zero = [c for c in counts if c > 0]
@@ -260,7 +299,7 @@ def _detect_delimiter(sample_lines: Sequence[str]) -> str:
         score = min(non_zero) * 100 + len(non_zero)
         if score > best_score:
             best, best_score = delim, score
-    if best_score <= 0:
+    if best is None or best_score <= 0:
         return "whitespace"
     return best
 

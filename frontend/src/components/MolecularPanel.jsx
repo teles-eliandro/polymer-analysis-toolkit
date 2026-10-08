@@ -12,6 +12,7 @@ import { molecularApi, describeError } from '../services/api';
 import { useI18n, formatNumber } from '../i18n/I18nContext';
 import { Stat, StatGrid, Disclosure, ErrorBanner } from './ui';
 import { Formula, FormulaDisclosure } from './Formula';
+import FileDrop from './FileDrop';
 
 const MOLECULAR_KEYS = [
   ['Mn', 'molecular.Mn', 'molecular.MnNote'],
@@ -51,8 +52,7 @@ export default function MolecularPanel() {
     setError('');
   };
 
-  const handleFileChange = async (e) => {
-    const f = e.target.files?.[0] || null;
+  const handleFileChange = async (f) => {
     setFile(f);
     resetOutput();
     setPreview(null);
@@ -170,12 +170,15 @@ export default function MolecularPanel() {
       <div className="input-options">
         <section className="card">
           <h3>{t('common.upload')}</h3>
-          <label className="field">
-            <span className="field-label">{t('molecular.uploadLabel')}</span>
-            <input type="file" accept=".csv,.txt,.tsv,.dat" onChange={handleFileChange} />
-            <span className="field-hint">{t('molecular.uploadHint')}</span>
-          </label>
-          {file ? <div className="file-name">{file.name}</div> : null}
+          <FileDrop
+            onFile={handleFileChange}
+            onError={setError}
+            label={t('molecular.uploadLabel')}
+            hint={t('file.accepted', {
+              list: 'CSV, TSV, TXT, DAT, ASC, PRN, XY, JSON',
+            })}
+          />
+          <p className="field-hint">{t('molecular.uploadHint')}</p>
 
           <div className="options-row">
             <label className="checkbox">

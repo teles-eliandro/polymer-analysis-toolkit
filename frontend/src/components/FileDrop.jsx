@@ -1,11 +1,21 @@
 /**
  * File input shared by every module panel.
  *
- * Reads the file in the browser and hands the text to the same parser the
- * paste box uses, so both routes accept exactly the same formats. The file is
- * not uploaded for analysis: only the parsed numbers are sent, which keeps
- * the API contract unchanged and means a file the parser cannot read fails
- * here with a readable message instead of as a 422 from the server.
+ * Two modes, chosen by which callback is passed:
+ *
+ * - `onText` (default): the file is read in the browser and its text handed
+ *   to the same parser the paste box uses, so both routes accept exactly the
+ *   same formats. Only the parsed numbers are uploaded, which keeps the API
+ *   contract unchanged and means a file the parser cannot read fails here
+ *   with a readable message instead of as a 422 from the server.
+ * - `onFile`: the File object itself is handed back, without reading it. Used
+ *   by the molar-mass module, whose importer runs on the server and detects
+ *   the vendor convention from the raw bytes, so gating on a browser-side
+ *   text parse would reject formats the backend can read.
+ *
+ * The visual design, drag-and-drop, size guard and clear button are identical
+ * in both modes; only the accepted extensions and what is done with the file
+ * differ.
  */
 
 import React, { useRef, useState } from 'react';
@@ -23,8 +33,22 @@ const TEXT_EXTENSIONS = [
   '.json',
 ];
 
+/** Extensions the molar-mass importer attempts. Wider than the text list
+ * because the file goes to the server, which sniffs the delimiter, the header
+ * language and the column roles instead of assuming a fixed layout. Spreadsheet
+ * and binary instrument formats are not listed: the importer parses text, and
+ * accepting a file it would then fail to read is worse than refusing it here. */
+const IMPORT_EXTENSIONS = [
+  ...TEXT_EXTENSIONS,
+  '.asc',
+  '.prn',
+];
+
 /** Refuse anything large enough to freeze the tab while parsing. */
 const MAX_BYTES = 8 * 1024 * 1024;
+
+/** Server uploads never touch the tab's memory, so allow a larger file. */
+const MAX_UPLOAD_BYTES = 32 * 1024 * 1024;
 
 function extensionOf(name) {
   const dot = name.lastIndexOf('.');
@@ -33,26 +57,38 @@ function extensionOf(name) {
 
 export default function FileDrop({
   onText,
+  onFile,
   onError,
   label,
   hint,
-  accept = TEXT_EXTENSIONS.join(','),
+  accept,
 }) {
   const { t } = useI18n();
   const inputRef = useRef(null);
   const [fileName, setFileName] = useState('');
   const [dragging, setDragging] = useState(false);
 
+  // Upload mode: the server importer does the format detection.
+  const uploadMode = !onText && typeof onFile === 'function';
+  const allowed = uploadMode ? IMPORT_EXTENSIONS : TEXT_EXTENSIONS;
+  const maxBytes = uploadMode ? MAX_UPLOAD_BYTES : MAX_BYTES;
+  const resolvedAccept = accept || allowed.join(',');
+
   const read = (file) => {
     if (!file) return;
     onError?.('');
     const ext = extensionOf(file.name);
-    if (!TEXT_EXTENSIONS.includes(ext)) {
+    if (!allowed.includes(ext)) {
       onError?.(t('file.unsupported', { ext: ext || file.name }));
       return;
     }
-    if (file.size > MAX_BYTES) {
-      onError?.(t('file.tooLarge', { mb: Math.round(MAX_BYTES / 1024 / 1024) }));
+    if (file.size > maxBytes) {
+      onError?.(t('file.tooLarge', { mb: Math.round(maxBytes / 1024 / 1024) }));
+      return;
+    }
+    if (uploadMode) {
+      setFileName(file.name);
+      onFile(file);
       return;
     }
     const reader = new FileReader();
@@ -107,7 +143,7 @@ export default function FileDrop({
         <input
           ref={inputRef}
           type="file"
-          accept={accept}
+          accept={resolvedAccept}
           onChange={onInputChange}
           onClick={(e) => e.stopPropagation()}
           className="file-drop-input"
