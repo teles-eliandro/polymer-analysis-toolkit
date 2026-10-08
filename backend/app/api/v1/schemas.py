@@ -114,6 +114,18 @@ class TGAResult(BaseModel):
     T_95pct: float | None = Field(None, description="Temperature at 95 % mass loss, Celsius.")
     residue_pct: float = Field(description="Residue at the end of the run, percent.")
     steps: list[TGAStep]
+    unattributed_loss_pct: float = Field(
+        0.0,
+        description=(
+            "Mass lost that no reported step accounts for, percent. Non-zero "
+            "when a loss is spread too gradually for its rate to stand out "
+            "against the noise, so it cannot be separated into a step."
+        ),
+    )
+    notes: list[str] = Field(
+        default_factory=list,
+        description="What the analysis could and could not resolve.",
+    )
     temperature: list[float]
     mass_pct: list[float]
     dtg: list[float]

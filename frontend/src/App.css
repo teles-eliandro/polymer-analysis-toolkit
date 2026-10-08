@@ -1,119 +1,981 @@
-.App {
-    max-width: 900px;
-    margin: 0 auto;
-    padding: 20px;
-    font-family: Arial, sans-serif;
-  }
-  
-  header {
-    text-align: center;
-    margin-bottom: 30px;
-  }
-  
-  input[type="number"] {
-    width: 120px;
-    padding: 6px;
-    margin-right: 10px;
-  }
-  
-  .input-row {
-    display: flex;
-    align-items: center;
-    margin-bottom: 8px;
-  }
-  
-  .add-row-btn {
-    margin-top: 10px;
-    padding: 6px 12px;
-    background: #e0e0e0;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-  }
-  
-  .file-upload {
-    display: inline-block;
-    padding: 10px 15px;
-    background: #f0f0f0;
-    border: 1px dashed #ccc;
-    border-radius: 4px;
-    cursor: pointer;
-  }
-  
-  .file-upload input {
-    display: none;
-  }
-  
-  .submit-btn {
-    margin-top: 20px;
-    padding: 10px 20px;
-    background: #2196F3;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 16px;
-  }
-  
-  .submit-btn:disabled {
-    background: #ccc;
-  }
-  
-  .error-message {
-    color: red;
-    margin-top: 15px;
-    padding: 10px;
-    background: #ffe6e6;
-    border-radius: 4px;
-  }
-  
-  .metrics {
-    display: flex;
-    gap: 20px;
-    margin: 20px 0;
-    justify-content: center;
-  }
-  
-  .metric-box {
-    text-align: center;
-    padding: 15px;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    min-width: 140px;
-  }
-  
-  .export-buttons {
-    text-align: center;
-    margin-top: 20px;
-  }
-  
-  .export-buttons button {
-    padding: 8px 16px;
-    margin: 0 10px;
-  }
+/**
+ * Stylesheet for the Polymer Analysis Toolkit.
+ *
+ * Written mobile-first: the base rules target a narrow phone, and the two
+ * breakpoints widen the layout for tablets and desktops. The previous
+ * stylesheet styled none of the classes the panels actually use, so every
+ * module rendered as unstyled HTML; the class names here are taken from the
+ * components, not guessed.
+ *
+ * Two rules matter more than the rest:
+ *
+ *   1. Nothing may set a fixed width wider than a small phone. Grids use
+ *      `minmax(0, 1fr)` and `min-width: 0`, because a grid or flex child
+ *      defaults to `min-width: auto` and refuses to shrink below its content,
+ *      which is what makes a long number or a table overflow the viewport.
+ *   2. Tables scroll inside their own container. A wide table must never make
+ *      the page itself scroll sideways.
+ */
 
-.subtitle {
-  font-size: 1.1em;
-  color: #555;
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --border: #dfe3e8;
+  --border-strong: #c4cad2;
+  --text: #12131a;
+  --text-muted: #5b6270;
+  --text-faint: #878e9c;
+  --accent: #1668c9;
+  --accent-strong: #0f4f9e;
+  --accent-soft: #e8f1fc;
+  --ok: #1a7f4b;
+  --ok-soft: #e6f5ec;
+  --warn: #8a5a00;
+  --warn-soft: #fdf3e0;
+  --error: #b3261e;
+  --error-soft: #fdecea;
+  --radius: 8px;
+  --radius-sm: 5px;
+  --shadow: 0 1px 2px rgba(16, 24, 40, 0.06),
+    0 1px 3px rgba(16, 24, 40, 0.1);
+  /* Comfortable tap target; below ~44px a touch target is hard to hit. */
+  --tap: 44px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  /* Prevent iOS from inflating text in landscape. */
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.55;
+  /* Stop a stray wide element from scrolling the whole page sideways. */
+  overflow-x: hidden;
+}
+
+.App {
+  /* A phone-first column. Each breakpoint below widens this. */
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 16px;
+  padding-left: max(16px, env(safe-area-inset-left));
+  padding-right: max(16px, env(safe-area-inset-right));
+}
+
+/* ---------------------------------------------------------------- header -- */
+
+.app-header,
+header {
   margin-bottom: 20px;
 }
 
-.introduction {
-  background: #f9f9f9;
-  padding: 20px;
-  border-radius: 8px;
-  margin-bottom: 25px;
-  font-size: 0.95em;
+.header-top {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.app-header h1,
+header h1 {
+  font-size: 1.35rem;
+  line-height: 1.25;
+  margin: 0 0 4px;
+  /* A long unbroken title must not push the page wider than the screen. */
+  overflow-wrap: anywhere;
+}
+
+.subtitle {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  margin: 0 0 8px;
+}
+
+.tagline {
+  color: var(--text-faint);
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.lang-switcher {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.lang-label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.lang-switcher button,
+.lang-switcher select {
+  min-height: 36px;
+  padding: 6px 12px;
+  font-size: 0.9rem;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.lang-switcher button[aria-pressed='true'] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* ------------------------------------------------------------ module nav -- */
+
+.module-nav {
+  display: flex;
+  gap: 8px;
+  /* Wrapping, not horizontal scrolling: five tabs at 360px would otherwise
+     push the page sideways. */
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+  padding-bottom: 4px;
+}
+
+.module-nav button {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: var(--tap);
+  padding: 10px 12px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  background: var(--surface);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  box-shadow: var(--shadow);
+}
+
+.module-nav button[aria-current='page'],
+.module-nav button.is-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* --------------------------------------------------------------- panels -- */
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  box-shadow: var(--shadow);
+  /* Grid/flex children default to min-width:auto and will not shrink below
+     their content, which is the usual cause of sideways scroll. */
+  min-width: 0;
+}
+
+.panel h2 {
+  font-size: 1.1rem;
+  margin: 0 0 4px;
+  overflow-wrap: anywhere;
+}
+
+.panel > p,
+.panel-description {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  margin: 0 0 16px;
+}
+
+.form-section {
+  margin-bottom: 16px;
+  min-width: 0;
+}
+
+.input-options,
+.options-row {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 14px;
+  min-width: 0;
+}
+
+.field-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.field-hint {
+  font-size: 0.78rem;
+  color: var(--text-faint);
+  line-height: 1.4;
+}
+
+.field textarea {
+  width: 100%;
+  min-height: 140px;
+  padding: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* Below 16px iOS zooms the page on focus, which then looks broken. */
+  font-size: 16px;
+  line-height: 1.45;
+  color: var(--text);
+  background: #fcfcfd;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  resize: vertical;
+}
+
+.field input[type='number'],
+.field input[type='text'],
+.field select,
+select,
+input[type='number'],
+input[type='text'] {
+  width: 100%;
+  min-height: var(--tap);
+  padding: 8px 10px;
+  font-size: 16px;
+  font-family: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+}
+
+.field textarea:focus,
+.field input:focus,
+select:focus,
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--tap);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.checkbox input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  flex: none;
+}
+
+/* -------------------------------------------------------- buttons -- */
+
+.submit-btn {
+  display: block;
+  width: 100%;
+  min-height: var(--tap);
+  margin-top: 8px;
+  padding: 12px 20px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.submit-btn:hover:not(:disabled) {
+  background: var(--accent-strong);
+}
+
+.submit-btn:disabled {
+  background: var(--border-strong);
+  cursor: not-allowed;
+}
+
+.ghost,
+.add-row-btn,
+.link-btn,
+.export-buttons button {
+  min-height: 38px;
+  padding: 8px 14px;
+  font-size: 0.88rem;
+  font-family: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.link-btn {
+  border-color: transparent;
+  background: transparent;
+  color: var(--accent);
+  padding: 4px 2px;
+  min-height: 0;
+  text-decoration: underline;
+}
+
+.export-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+/* ------------------------------------------------------------ file drop -- */
+
+.file-drop-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+  min-width: 0;
+}
+
+.file-drop {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: var(--tap);
+  padding: 14px;
+  background: #fcfcfd;
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--radius);
+  cursor: pointer;
+  min-width: 0;
+}
+
+.file-drop.is-dragging {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.file-drop.has-file {
+  border-style: solid;
+  border-color: var(--ok);
+  background: var(--ok-soft);
+}
+
+.file-drop-input {
+  display: none;
+}
+
+.file-drop-icon {
+  flex: none;
+  font-size: 1.2rem;
+  color: var(--text-faint);
+}
+
+.file-drop.has-file .file-drop-icon {
+  color: var(--ok);
+}
+
+.file-drop-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.file-drop-primary {
+  font-size: 0.9rem;
+  font-weight: 500;
+  /* A long filename must not widen the page. */
+  overflow-wrap: anywhere;
+}
+
+.file-drop-hint {
+  font-size: 0.75rem;
+  color: var(--text-faint);
+}
+
+.file-drop-clear {
+  align-self: flex-start;
+  min-height: 32px;
+  padding: 4px 10px;
+  font-size: 0.8rem;
+  color: var(--error);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.file-upload {
+  display: inline-block;
+  padding: 10px 15px;
+  font-size: 0.9rem;
+  background: #fcfcfd;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.file-upload input {
+  display: none;
+}
+
+.file-name {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+/* --------------------------------------------------------------- stats -- */
+
+/* One column on a phone. `minmax(0, 1fr)` is what allows the column to be
+   narrower than its content, instead of overflowing the panel. */
+.stat-grid,
+.metrics {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  margin: 16px 0;
+}
+
+.stat,
+.metric-box {
+  min-width: 0;
+  padding: 12px;
+  text-align: left;
+  background: #fcfcfd;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.stat-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.stat-value {
+  font-size: 1.25rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.stat-unit {
+  margin-left: 4px;
+  font-size: 0.85rem;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.stat-note {
+  font-size: 0.75rem;
+  color: var(--text-faint);
+  margin-top: 2px;
+}
+
+.flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: 0.8rem;
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+.flag.on {
+  background: var(--ok-soft);
+  color: var(--ok);
+  border-color: #b7e0c7;
+}
+
+.flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.two-col {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+
+/* -------------------------------------------------------------- results -- */
+
+.results,
+.results-section {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  min-width: 0;
+}
+
+.results-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.results h3,
+.results-section h3 {
+  font-size: 1rem;
+  margin: 0 0 8px;
+}
+
+.chart-container,
+.plot {
+  width: 100%;
+  min-width: 0;
+  /* Plotly sizes itself in px; this keeps a wide figure inside the panel. */
+  overflow: hidden;
+}
+
+.chart-container .js-plotly-plot,
+.plot .js-plotly-plot {
+  width: 100% !important;
+}
+
+/* A table scrolls inside its own box; the page never scrolls sideways. */
+.table-wrap {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 12px 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.data-table {
+  /* Shrink to content so a narrow table is not stretched while a wide one
+     scrolls; `min-width` keeps columns legible rather than crushed. */
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.data-table th,
+.data-table td {
+  padding: 8px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.data-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+}
+
+.data-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* ------------------------------------------------------- notes, errors -- */
+
+.error-message {
+  margin: 12px 0;
+  padding: 10px 12px;
+  font-size: 0.88rem;
+  color: var(--error);
+  background: var(--error-soft);
+  border: 1px solid #f3c3c0;
+  border-radius: var(--radius-sm);
+  overflow-wrap: anywhere;
+}
+
+.note-box,
+.introduction,
+.intro {
+  margin: 14px 0;
+  padding: 12px;
+  font-size: 0.85rem;
   line-height: 1.5;
+  color: var(--text-muted);
+  background: var(--warn-soft);
+  border: 1px solid #f0dcb4;
+  border-radius: var(--radius-sm);
 }
 
-.introduction ul {
-  margin: 10px 0 15px 20px;
+.introduction ul,
+.intro ul {
+  margin: 8px 0 8px 18px;
+  padding: 0;
 }
 
-.introduction code {
-  background: #eee;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-family: monospace;
+.introduction code,
+.intro code,
+.note-box code {
+  padding: 1px 5px;
+  font-size: 0.85em;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 3px;
+}
+
+.api-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 8px 12px;
+  font-size: 0.82rem;
+  border-radius: var(--radius-sm);
+  overflow-wrap: anywhere;
+}
+
+.api-status .dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-faint);
+}
+
+.api-status.is-online {
+  color: var(--ok);
+  background: var(--ok-soft);
+}
+
+.api-status.is-online .dot {
+  background: var(--ok);
+}
+
+.api-status.is-offline {
+  color: var(--error);
+  background: var(--error-soft);
+}
+
+.api-status.is-offline .dot {
+  background: var(--error);
+}
+
+.preview-meta {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.crosscheck {
+  padding: 12px;
+  font-size: 0.88rem;
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+.decisions,
+.log {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  max-height: 320px;
+  overflow: auto;
+  overflow-wrap: anywhere;
+}
+
+.tagline,
+.assignment-block {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* -------------------------------------------------- disclosures -- */
+
+.disclosure,
+.formula-block {
+  margin: 12px 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  min-width: 0;
+}
+
+.disclosure-toggle,
+.formula-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: var(--tap);
+  padding: 10px 12px;
+  font-size: 0.88rem;
+  font-weight: 500;
+  font-family: inherit;
+  text-align: left;
+  color: var(--text);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.disclosure-caret,
+.formula-caret {
+  flex: none;
+  color: var(--text-faint);
+}
+
+.disclosure-hint {
+  margin-left: auto;
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.disclosure-body,
+.formula-body {
+  padding: 0 12px 12px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+/* ------------------------------------------------------- formulas -- */
+
+.formula-toggle-title {
+  min-width: 0;
+}
+
+.formula {
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+
+.formula:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.formula-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* The expression is the one thing here that must never wrap badly, so it
+   scrolls on its own axis rather than breaking mid-symbol. */
+.formula-expression {
+  margin: 6px 0;
+  padding: 8px 10px;
+  overflow-x: auto;
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+}
+
+.formula-expression code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.82rem;
+  white-space: pre;
+  color: var(--text);
+}
+
+.formula-symbols {
+  margin: 8px 0 0;
+  font-size: 0.8rem;
+}
+
+.formula-symbol {
+  display: flex;
+  gap: 8px;
+  padding: 2px 0;
+}
+
+.formula-symbol dt {
+  flex: none;
+  min-width: 3.2em;
+  font-weight: 600;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--text);
+}
+
+.formula-symbol dd {
+  margin: 0;
+  min-width: 0;
+}
+
+.formula-note {
+  margin: 8px 0 0;
+  font-size: 0.8rem;
+  color: var(--text-faint);
+  line-height: 1.45;
+}
+
+.formula-reference {
+  margin: 8px 0 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.formula-reference-label {
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* -------------------------------------------------------------- footer -- */
+
+.app-footer,
+footer {
+  margin-top: 28px;
+  padding-top: 14px;
+  font-size: 0.8rem;
+  color: var(--text-faint);
+  border-top: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+
+.app-footer a,
+footer a {
+  color: var(--accent);
+}
+
+/* --------------------------------------------------------- breakpoints -- */
+
+/* Two columns: tablets in portrait, large phones in landscape. */
+@media (min-width: 560px) {
+  .App {
+    padding: 20px;
+  }
+
+  .header-top {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+
+  .app-header h1,
+  header h1 {
+    font-size: 1.55rem;
+  }
+
+  .input-options,
+  .options-row {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .input-options > .field,
+  .options-row > .field {
+    flex: 1 1 200px;
+    margin-bottom: 0;
+  }
+
+  .stat-grid,
+  .metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .two-col {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .module-nav button {
+    flex: 0 1 auto;
+  }
+
+  .submit-btn {
+    display: inline-block;
+    width: auto;
+    min-width: 180px;
+  }
+
+  .results-head {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+/* Desktop. */
+@media (min-width: 900px) {
+  .App {
+    padding: 24px;
+  }
+
+  .stat-grid,
+  .metrics {
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  }
+
+  .panel {
+    padding: 20px;
+  }
+}
+
+/* Touch screens: larger hit areas, no hover-only affordances. */
+@media (hover: none) {
+  .module-nav button:hover,
+  .submit-btn:hover:not(:disabled) {
+    /* Hover styles are meaningless on touch and cause a sticky state. */
+    background: inherit;
+  }
+}
+
+/* Respect the OS preference for reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Print: drop the chrome, keep the numbers. */
+@media print {
+  body {
+    background: #fff;
+  }
+
+  .module-nav,
+  .api-status,
+  .export-buttons,
+  .submit-btn,
+  .file-drop-wrap,
+  .formula-toggle,
+  .disclosure-toggle {
+    display: none !important;
+  }
+
+  .panel {
+    border: none;
+    box-shadow: none;
+    padding: 0;
+  }
+
+  .formula-body,
+  .disclosure-body {
+    display: block !important;
+  }
 }

@@ -74,6 +74,50 @@ def test_comma_delimiter_with_decimal_comma_recombined():
     assert res.Mn == pytest.approx(MN_REF, rel=1e-9)
 
 
+def test_semicolon_wins_when_decimal_commas_outnumber_it():
+    """
+    Regression: a pt-BR export with two-decimal values put twice as many
+    commas as semicolons on each line (``1000,00;0,05``), so counting raw
+    separators chose comma and the file was rejected as containing no
+    distribution. The decimal commas must be discounted before the vote.
+    """
+    blob = (
+        b"Sample: PS-01\nOperator: Materials Lab\n\n"
+        b"Massa Molecular (g/mol);Fracao Massica\n"
+        b"1000,00;0,05\n2000,00;0,25\n5000,00;0,50\n10000,00;0,20\n"
+    )
+    res, r = _averages(blob)
+    assert len(r.masses) == 4
+    assert r.masses[0] == pytest.approx(1000.0)
+    assert r.weight_fractions == pytest.approx([0.05, 0.25, 0.50, 0.20], rel=1e-9)
+
+
+def test_scientific_notation_survives_delimiter_detection():
+    """
+    Regression: the decimal-comma discount must not swallow a comma that
+    really separates fields. In ``1.0e3,1200`` four digits follow the comma,
+    so it is a delimiter; treating it as a decimal mark lost the file.
+
+    The file is headerless, so the second column is taken as the distribution
+    weight and normalised -- there is no header to call it intensity.
+    """
+    res, r = _averages(b"1.0e3,1200\n1.0e4,8000\n1.0e5,15000\n")
+    assert len(r.masses) == 3
+    assert r.masses[0] == pytest.approx(1000.0)
+    assert r.masses[-1] == pytest.approx(100000.0)
+    assert sum(r.weight_fractions) == pytest.approx(1.0, rel=1e-9)
+
+
+def test_headerless_decimal_point_after_comma_is_not_a_decimal_comma():
+    """
+    Regression: in ``1000,0.2`` the comma separates fields and the text after
+    it starts the next value. Reading it as a decimal mark lost the file.
+    """
+    res, r = _averages(b"1000,0.2\n2000,0.5\n5000,0.3\n")
+    assert len(r.masses) == 3
+    assert r.weight_fractions == pytest.approx([0.2, 0.5, 0.3], rel=1e-9)
+
+
 def test_instrument_preamble_is_skipped():
     blob = (
         b"Agilent GPC/SEC Report\n"

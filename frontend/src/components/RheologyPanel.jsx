@@ -5,6 +5,8 @@ import Plot from 'react-plotly.js';
 import { rheologyApi, describeError } from '../services/api';
 import { useI18n } from '../i18n/I18nContext';
 import { Stat, StatGrid, ErrorBanner } from './ui';
+import FileDrop from './FileDrop';
+import { Formula, FormulaDisclosure } from './Formula';
 
 function parseThreeColumns(text) {
   const w = [];
@@ -39,6 +41,28 @@ export default function RheologyPanel() {
   const [input, setInput] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [fileNote, setFileNote] = useState('');
+
+  /**
+   * A rheometer export is usually three columns, so the file is
+   * re-serialised as tab-separated triples rather than routed through the
+   * two-column parser. Only the numbers are sent.
+   */
+  const loadFile = (raw, file) => {
+    setError('');
+    setFileNote('');
+    if (!file) {
+      setText('');
+      return;
+    }
+    const { w, gp, gpp } = parseThreeColumns(raw);
+    if (w.length === 0) {
+      setError(t('file.noPoints', { name: file.name }));
+      return;
+    }
+    setText(w.map((v, i) => `${v}\t${gp[i]}\t${gpp[i]}`).join('\n'));
+    setFileNote(t('file.loaded', { name: file.name, n: w.length }));
+  };
 
   const run = async () => {
     setError('');
@@ -66,6 +90,16 @@ export default function RheologyPanel() {
       <p className="intro">{t('rheology.intro')}</p>
 
       <div className="card">
+        <FileDrop
+          onText={loadFile}
+          onError={setError}
+          hint={t('file.accepted', { list: 'CSV, TSV, TXT, DAT, ASC' })}
+        />
+        {fileNote ? (
+          <p className="preview-meta" role="status">
+            {fileNote}
+          </p>
+        ) : null}
         <label className="field">
           <span className="field-label">
             {t('rheology.omega')} / {t('rheology.gPrime')} / {t('rheology.gDoublePrime')}
@@ -175,6 +209,51 @@ export default function RheologyPanel() {
           ) : null}
         </section>
       ) : null}
+
+      <FormulaDisclosure>
+        <Formula
+          name={t('rheo.f.moduli.name')}
+          expression="G' = (s0/g0)cos d      G'' = (s0/g0)sin d"
+          symbols={[
+            { symbol: "G'", meaning: t('rheo.f.moduli.Gp') },
+            { symbol: "G''", meaning: t('rheo.f.moduli.Gpp') },
+            { symbol: 'd', meaning: t('rheo.f.moduli.delta') },
+          ]}
+          note={t('rheo.f.moduli.note')}
+          reference="ISO 6721-10:2015, Plastics - Determination of dynamic mechanical properties - Part 10: Complex shear viscosity using a parallel-plate oscillatory rheometer."
+        />
+        <Formula
+          name={t('rheo.f.tan.name')}
+          expression="tan d = G'' / G'"
+          symbols={[
+            { symbol: "G'", meaning: t('rheo.f.tan.Gp') },
+            { symbol: "G''", meaning: t('rheo.f.tan.Gpp') },
+          ]}
+          note={t('rheo.f.tan.note')}
+          reference="ASTM D4440-15, Standard Test Method for Plastics: Dynamic Mechanical Properties: Melt Rheology."
+        />
+        <Formula
+          name={t('rheo.f.gel.name')}
+          expression="gel point: the w where |G' - G''| / G' <= tolerance,  with G' > G''"
+          symbols={[
+            { symbol: "G'", meaning: t('rheo.f.gel.Gp') },
+            { symbol: "G''", meaning: t('rheo.f.gel.Gpp') },
+          ]}
+          note={t('rheo.f.gel.note')}
+          reference="Winter & Chambon, Analysis of linear viscoelasticity of a crosslinking polymer at the gel point, Journal of Rheology 30 (1986) 367-382. The rigorous criterion is a power law in both moduli; crossing of the two is a practical approximation."
+        />
+        <Formula
+          name={t('rheo.f.cross.name')}
+          expression="cross-over: G' = G''  ->  tan d = 1"
+          symbols={[
+            { symbol: "G'", meaning: t('rheo.f.cross.Gp') },
+            { symbol: "G''", meaning: t('rheo.f.cross.Gpp') },
+            { symbol: 'tan d', meaning: t('rheo.f.cross.tan') },
+          ]}
+          note={t('rheo.f.cross.note')}
+          reference="ASTM D4440-15. The cross-over of the moduli is a practical marker of the terminal-to-plateau transition for a linear polymer; it shifts with frequency, so the value is only comparable between measurements made at the same angular frequency."
+        />
+      </FormulaDisclosure>
     </div>
   );
 }

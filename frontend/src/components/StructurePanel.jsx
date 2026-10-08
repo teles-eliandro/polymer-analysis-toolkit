@@ -5,6 +5,8 @@ import Plot from 'react-plotly.js';
 import { structureApi, describeError } from '../services/api';
 import { useI18n } from '../i18n/I18nContext';
 import { Stat, StatGrid, DataTable, ErrorBanner, Disclosure, parseTwoColumns } from './ui';
+import FileDrop from './FileDrop';
+import { Formula, FormulaDisclosure } from './Formula';
 
 // The API rejects shorter traces with a 422, so the limit is enforced here too
 // and the user gets a readable message instead of a validation dump.
@@ -35,6 +37,26 @@ export default function StructurePanel() {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [fileNote, setFileNote] = useState('');
+
+  /** A file fills the same textarea the paste box uses, so both routes share
+   *  one parser and cannot drift apart. Only the numbers are sent. */
+  const loadFile = (text, file) => {
+    setError('');
+    setFileNote('');
+    const setText = mode === 'xrd' ? setXrdText : setFtirText;
+    if (!file) {
+      setText('');
+      return;
+    }
+    const { x, y } = parseTwoColumns(text);
+    if (x.length === 0) {
+      setError(t('file.noPoints', { name: file.name }));
+      return;
+    }
+    setText(x.map((v, i) => `${v}\t${y[i]}`).join('\n'));
+    setFileNote(t('file.loaded', { name: file.name, n: x.length }));
+  };
 
   const run = async () => {
     setError('');
@@ -103,6 +125,16 @@ export default function StructurePanel() {
       </div>
 
       <div className="card">
+        <FileDrop
+          onText={loadFile}
+          onError={setError}
+          hint={t('file.accepted', { list: 'CSV, TSV, TXT, DAT, ASC' })}
+        />
+        {fileNote ? (
+          <p className="preview-meta" role="status">
+            {fileNote}
+          </p>
+        ) : null}
         {mode === 'xrd' ? (
           <>
             <TraceInput
@@ -184,6 +216,53 @@ export default function StructurePanel() {
 
       {result?.kind === 'xrd' ? <XrdResults data={result.data} t={t} kFactor={kFactor} /> : null}
       {result?.kind === 'ftir' ? <FtirResults data={result.data} t={t} input={result.input} /> : null}
+
+      <FormulaDisclosure>
+        <Formula
+          name={t('structure.f.bragg.name')}
+          expression="d = λ / (2 sin θ)"
+          symbols={[
+            { symbol: 'd', meaning: t('structure.f.bragg.d') },
+            { symbol: 'λ', meaning: t('structure.f.bragg.lambda') },
+            { symbol: 'θ', meaning: t('structure.f.bragg.theta') },
+          ]}
+          note={t('structure.f.bragg.note')}
+          reference="Bragg & Bragg, 'The reflection of X-rays by crystals', Proc. R. Soc. A 88 (1913) 428–438."
+        />
+        <Formula
+          name={t('structure.f.scherrer.name')}
+          expression="D = K λ / (β cos θ)"
+          symbols={[
+            { symbol: 'D', meaning: t('structure.f.scherrer.D') },
+            { symbol: 'K', meaning: t('structure.f.scherrer.K') },
+            { symbol: 'λ', meaning: t('structure.f.scherrer.lambda') },
+            { symbol: 'β', meaning: t('structure.f.scherrer.beta') },
+            { symbol: 'θ', meaning: t('structure.f.scherrer.theta') },
+          ]}
+          note={t('structure.f.scherrer.note')}
+          reference="Scherrer, 'Bestimmung der Größe und der inneren Struktur von Kolloidteilchen mittels Röntgenstrahlen', Göttinger Nachrichten 2 (1918) 98–100. Instrumental broadening is subtracted in quadrature before β is used."
+        />
+        <Formula
+          name={t('structure.f.fwhm.name')}
+          expression="β = 2·|2θ(half) − 2θ(peak)|   (half-width at half maximum, in radians)"
+          symbols={[
+            { symbol: 'β', meaning: t('structure.f.fwhm.beta') },
+            { symbol: '2θ', meaning: t('structure.f.fwhm.tt') },
+          ]}
+          note={t('structure.f.fwhm.note')}
+          reference="The FWHM is the β that the Scherrer equation expects, and it must be corrected for instrumental broadening (β² = β_obs² − β_inst² for a Gaussian profile) before use. Without that correction the crystallite size is underestimated, and on a well-crystallised sample the instrumental contribution can be most of the observed width."
+        />
+        <Formula
+          name={t('structure.f.xc.name')}
+          expression="CI (%) = 100 · (A_crystalline) / (A_total)"
+          symbols={[
+            { symbol: 'A', meaning: t('structure.f.xc.A') },
+            { symbol: 'At', meaning: t('structure.f.xc.At') },
+          ]}
+          note={t('structure.f.xc.note')}
+          reference="Segal et al., 'An empirical method for estimating the degree of crystallinity of native cellulose using the X-ray diffractometer', Textile Research Journal 29 (1959) 786–794. Relative index only; it is not a mass fraction and is comparable only between patterns measured identically."
+        />
+      </FormulaDisclosure>
     </div>
   );
 }

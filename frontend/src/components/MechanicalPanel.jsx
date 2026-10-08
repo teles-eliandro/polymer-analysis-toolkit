@@ -5,6 +5,8 @@ import Plot from 'react-plotly.js';
 import { mechanicalApi, describeError } from '../services/api';
 import { useI18n } from '../i18n/I18nContext';
 import { Stat, StatGrid, ErrorBanner, parseTwoColumns } from './ui';
+import FileDrop from './FileDrop';
+import { Formula, FormulaDisclosure } from './Formula';
 
 export default function MechanicalPanel() {
   const { t } = useI18n();
@@ -15,6 +17,24 @@ export default function MechanicalPanel() {
   const [input, setInput] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [fileNote, setFileNote] = useState('');
+
+  /** A file fills the same textarea the paste box uses; only numbers are sent. */
+  const loadFile = (raw, file) => {
+    setError('');
+    setFileNote('');
+    if (!file) {
+      setText('');
+      return;
+    }
+    const { x, y } = parseTwoColumns(raw);
+    if (x.length === 0) {
+      setError(t('file.noPoints', { name: file.name }));
+      return;
+    }
+    setText(x.map((v, i) => `${v}\t${y[i]}`).join('\n'));
+    setFileNote(t('file.loaded', { name: file.name, n: x.length }));
+  };
 
   const run = async () => {
     setError('');
@@ -51,6 +71,16 @@ export default function MechanicalPanel() {
       <p className="intro">{t('mechanical.intro')}</p>
 
       <div className="card">
+        <FileDrop
+          onText={loadFile}
+          onError={setError}
+          hint={t('file.accepted', { list: 'CSV, TSV, TXT, DAT, ASC' })}
+        />
+        {fileNote ? (
+          <p className="preview-meta" role="status">
+            {fileNote}
+          </p>
+        ) : null}
         <label className="field">
           <span className="field-label">
             {t('mechanical.strain')} / {t('mechanical.stress')}
@@ -167,6 +197,53 @@ export default function MechanicalPanel() {
           ) : null}
         </section>
       ) : null}
+
+      <FormulaDisclosure>
+        <Formula
+          name={t('mech.f.young.name')}
+          expression="E = Δσ / Δε   (slope of the initial linear region)"
+          symbols={[
+            { symbol: 'E', meaning: t('mech.f.young.E') },
+            { symbol: 'σ', meaning: t('mech.f.young.sigma') },
+            { symbol: 'ε', meaning: t('mech.f.young.epsilon') },
+          ]}
+          note={t('mech.f.young.note')}
+          reference="ASTM D638-22, Standard Test Method for Tensile Properties of Plastics; ISO 527-1:2019. Both require the modulus from the initial linear region, and neither permits a modulus quoted without the strain range it was fitted over."
+        />
+        <Formula
+          name={t('mech.f.fit.name')}
+          expression="E = Σ(εi − ε̄)(σi − σ̄) / Σ(εi − ε̄)²   (least squares)"
+          symbols={[
+            { symbol: 'E', meaning: t('mech.f.fit.E') },
+            { symbol: 'εi', meaning: t('mech.f.fit.eps') },
+            { symbol: 'σi', meaning: t('mech.f.fit.sig') },
+          ]}
+          note={t('mech.f.fit.note')}
+          reference="ISO 527-1:2019, determination of tensile modulus. The standard fits the slope over a defined strain window (typically 0.05 % to 0.25 %) rather than the whole curve, because the toe region at the start of the test is seating compliance, not material stiffness."
+        />
+        <Formula
+          name={t('mech.f.sigma.name')}
+          expression="σ = F / A₀      ε = (L − L₀) / L₀ × 100"
+          symbols={[
+            { symbol: 'F', meaning: t('mech.f.sigma.F') },
+            { symbol: 'A₀', meaning: t('mech.f.sigma.A0') },
+            { symbol: 'L₀', meaning: t('mech.f.sigma.L0') },
+          ]}
+          note={t('mech.f.sigma.note')}
+          reference="ISO 527-1:2019 (definitions of stress and strain). The original cross-section is used throughout; engineering stress, not true stress."
+        />
+        <Formula
+          name={t('mech.f.toughness.name')}
+          expression="U = ∫ σ dε   (area under the stress-strain curve)"
+          symbols={[
+            { symbol: 'U', meaning: t('mech.f.toughness.U') },
+            { symbol: 'σ', meaning: t('mech.f.toughness.sig') },
+            { symbol: 'ε', meaning: t('mech.f.toughness.eps') },
+          ]}
+          note={t('mech.f.toughness.note')}
+          reference="ASTM D638-22, Annex on energy at break. The area is integrated over the strain range supplied, so a truncated curve underestimates toughness."
+        />
+      </FormulaDisclosure>
     </div>
   );
 }

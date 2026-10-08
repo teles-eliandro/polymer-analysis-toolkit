@@ -59,8 +59,48 @@ def test_tga_detects_both_decomposition_steps():
     r = analyse_tga(T, m)
     assert len(r.steps) == 2
     losses = sorted(s["loss_pct"] for s in r.steps)
-    assert losses[0] == pytest.approx(29.5, abs=1.5)
-    assert losses[1] == pytest.approx(59.6, abs=1.5)
+    # Built as 30 % then 60 %, and the analysis recovers both exactly: the
+    # threshold locates each step, then the boundaries are extended to the
+    # valley between peaks so the decaying tails are counted with the step they
+    # belong to. Without that extension this read 23.8 % and 55.3 %.
+    assert losses[0] == pytest.approx(30.0, abs=1.0)
+    assert losses[1] == pytest.approx(60.0, abs=1.0)
+
+
+def test_tga_accounts_for_every_percent_of_mass():
+    """
+    The steps plus the unattributed remainder must equal the mass actually
+    lost. This is the invariant that makes the step list trustworthy: without
+    it, a detector that finds only one of two steps looks like a clean result
+    rather than an incomplete one.
+    """
+    T, m = _two_step_tga()
+    r = analyse_tga(T, m)
+    total_lost = float(m[0] - m[-1])
+    attributed = sum(s["loss_pct"] for s in r.steps)
+    assert attributed + r.unattributed_loss_pct == pytest.approx(total_lost, abs=0.05)
+    # And the remainder is not a way of hiding a missed step: it is the tail,
+    # so it stays small relative to the loss.
+    assert r.unattributed_loss_pct < 0.25 * total_lost
+
+
+def test_tga_flags_a_faint_event_riding_on_a_large_step():
+    """
+    A small loss whose rate never rises to the detection threshold is absorbed
+    into the span of a large one. Its mass is accounted for, but a reader must
+    be told a soft event is in there: reporting "one step of 76 %" with no note
+    hides that the first few percent are moisture rather than polymer.
+    """
+    T = np.linspace(30, 800, 1541)
+    m = np.full_like(T, 100.0)
+    m -= 5.0 / (1 + np.exp(-(T - 120) / 15))     # broad, faint moisture loss
+    m -= 72.0 / (1 + np.exp(-(T - 430) / 18))    # dominant decomposition
+    m += np.random.default_rng(11).normal(0, 0.02, T.size)
+    r = analyse_tga(T, m)
+    # The mass still balances, whether or not the faint event is split out.
+    attributed = sum(s["loss_pct"] for s in r.steps) + r.unattributed_loss_pct
+    assert attributed == pytest.approx(float(m[0] - m[-1]), abs=0.05)
+    assert any("riding on the main decomposition" in n for n in r.notes)
 
 
 def test_tga_max_rate_is_the_largest_dtg_peak():

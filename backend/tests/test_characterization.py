@@ -8,6 +8,7 @@ rather than from the implementation.
 
 from __future__ import annotations
 
+import json
 import math
 
 import numpy as np
@@ -439,3 +440,141 @@ def test_ftir_endpoint():
     r = client.post("/api/v1/structure/ftir", json={"wavenumber": wn.tolist(), "absorbance": a.tolist()})
     assert r.status_code == 200, r.text
     assert len(r.json()["matches"]) >= 3
+
+
+# ---------------------------------------------------------------------------
+# Regression: non-finite values must never reach the response
+# ---------------------------------------------------------------------------
+#
+# Real WAXS/SEC exports (Nika + Fit2D, DIFFRAC) carry many narrow spikes whose
+# width is below the sampling interval. Those peaks have no measurable FWHM, and
+# the first implementation wrote float("nan") into fwhm_deg while leaving the
+# crystallite size as None - breaking the parallel arrays and, because NaN is
+# not valid JSON, making Starlette raise on serialisation. Every synthetic test
+# passed because synthetic peaks are always wide enough to measure.
+#
+# This reproduces the failure mode from the real trace that exposed it
+# (Zenodo 10.5281/zenodo.20466241, WAXS of a PLA/PE film, lambda = 1.541 A).
+
+
+def _instrument_like_trace():
+    """A real WAXS trace segment where peaks have no measurable FWHM.
+
+    Taken from Zenodo 10.5281/zenodo.20466241 (WAXS of a PLA/PE film, lambda =
+    1.541 A), 2theta 23.58-32.58 deg, 110 points at the export's own 0.08 deg
+    spacing. In this region the background is rising steeply and the local
+    maxima are sub-sampling ripples whose shoulders never cross half maximum
+    within the search window, so _fwhm_at returns None for nine of them.
+
+    This is the fixture that actually reproduces the bug: a synthetic Gaussian
+    on a flat background does not, which is why the original suite missed it.
+    Recorded rather than regenerated so the regression cannot silently drift.
+    """
+    tt = np.array([
+        23.5803, 23.6621, 23.7439, 23.8257, 23.9075, 23.9894, 24.0712, 24.1531,
+        24.2349, 24.3168, 24.3987, 24.4806, 24.5625, 24.6444, 24.7264, 24.8083,
+        24.8903, 24.9723, 25.0543, 25.1363, 25.2183, 25.3003, 25.3824, 25.4645,
+        25.5465, 25.6286, 25.7107, 25.7928, 25.875, 25.9571, 26.0393, 26.1214,
+        26.2036, 26.2858, 26.368, 26.4502, 26.5325, 26.6147, 26.697, 26.7793,
+        26.8615, 26.9439, 27.0262, 27.1085, 27.1909, 27.2732, 27.3556, 27.438,
+        27.5204, 27.6028, 27.6853, 27.7677, 27.8502, 27.9327, 28.0152, 28.0977,
+        28.1802, 28.2627, 28.3453, 28.4278, 28.5104, 28.593, 28.6756, 28.7583,
+        28.8409, 28.9236, 29.0063, 29.0889, 29.1717, 29.2544, 29.3371, 29.4199,
+        29.5026, 29.5854, 29.6682, 29.751, 29.8339, 29.9167, 29.9996, 30.0825,
+        30.1654, 30.2483, 30.3312, 30.4142, 30.4971, 30.5801, 30.6631, 30.7461,
+        30.8291, 30.9122, 30.9952, 31.0783, 31.1614, 31.2445, 31.3276, 31.4108,
+        31.4939, 31.5771, 31.6603, 31.7435, 31.8268, 31.91, 31.9933, 32.0766,
+        32.1599, 32.2432, 32.3265, 32.4099, 32.4932, 32.5766,
+    ])
+    y = np.array([
+        345.557, 344.061, 343.663, 343.032, 341.231, 340.493, 340.18, 338.512,
+        338.003, 336.964, 336.159, 335.246, 333.351, 332.858, 330.945, 329.449,
+        328.384, 327.711, 327.935, 326.099, 324.981, 323.974, 322.16, 321.033,
+        320.401, 318.513, 318.103, 317.549, 315.863, 314.437, 313.617, 312.613,
+        311.483, 311.961, 312.11, 312.788, 313.185, 313.965, 314.86, 313.879,
+        313.053, 311.851, 309.627, 307.306, 304.392, 300.948, 298.457, 297.185,
+        295.497, 294.169, 293.739, 291.838, 292.474, 290.728, 289.971, 288.698,
+        288.813, 288.288, 287.492, 287.217, 285.932, 285.746, 285.386, 283.962,
+        282.847, 282.059, 281.418, 281.1, 281.444, 281.056, 280.478, 280.11,
+        279.981, 279.949, 280.779, 281.517, 281.898, 282.252, 283.926, 283.356,
+        283.367, 282.522, 281.59, 280.332, 278.397, 275.53, 271.582, 268.462,
+        263.182, 258.536, 253.342, 252.357, 249.753, 243.164, 234.278, 230.578,
+        234.278, 230.578, 227.112, 226.042, 228.951, 227.919, 229.134, 236.842,
+        251.361, 272.108, 297.189, 328.593, 356.831, 372.999,
+    ])
+    return tt, y[: tt.size]
+
+
+def test_xrd_never_returns_non_finite_values():
+    """Every reported value must be finite, and the arrays must stay parallel."""
+    tt, y = _instrument_like_trace()
+    r = analyse_xrd(tt.tolist(), y.tolist(), wavelength_angstrom=1.541)
+
+    for name in ("peaks_two_theta", "d_spacing_angstrom", "crystallite_size_nm", "fwhm_deg"):
+        values = getattr(r, name)
+        assert all(math.isfinite(v) for v in values), f"{name} contains a non-finite value"
+
+    n = len(r.peaks_two_theta)
+    assert len(r.d_spacing_angstrom) == n
+    assert len(r.crystallite_size_nm) == n
+    assert len(r.fwhm_deg) == n
+
+
+def test_xrd_endpoint_serialises_an_instrument_like_trace():
+    """
+    The endpoint must answer 200, and the body must survive allow_nan=False.
+
+    Before the fix this returned a 500: unmeasurable peaks were written as
+    NaN, and NaN is not valid JSON, so Starlette's serialiser raised. The
+    assert on json.dumps reproduces that serialiser's contract exactly.
+    """
+    tt, y = _instrument_like_trace()
+    r = client.post(
+        "/api/v1/structure/xrd",
+        json={"two_theta": tt.tolist(), "intensity": y.tolist(), "wavelength_angstrom": 1.541},
+    )
+    assert r.status_code == 200, r.text
+    json.dumps(r.json(), allow_nan=False)
+
+
+def test_unmeasurable_peaks_are_dropped_not_reported_as_nan():
+    """
+    A trace whose peaks cannot be measured yields fewer, valid peaks.
+
+    Nine local maxima in the fixture have no half-maximum crossing. They must
+    disappear from the result rather than appear with a NaN width.
+    """
+    tt, y = _instrument_like_trace()
+    r = analyse_xrd(tt.tolist(), y.tolist(), wavelength_angstrom=1.541)
+    assert r.fwhm_deg and all(f > 0 for f in r.fwhm_deg), r.fwhm_deg
+    assert r.crystallite_size_nm and all(s > 0 for s in r.crystallite_size_nm), r.crystallite_size_nm
+
+
+def test_crystallinity_index_is_not_reported_when_it_saturates():
+    """
+    A monotonically decaying pattern must not report 100 % crystallinity.
+
+    The crystallinity index divides peak area by total area. On a pattern whose
+    amorphous halo decays steeply (a q-space profile in arbitrary units), the
+    straight-line baseline sits under every point, so the whole trace counts as
+    crystalline and the index saturates. Observed on the real WAXS films in
+    Zenodo 10.5281/zenodo.20466241, where every sample returned 100 %. A
+    saturated index measures nothing - it means the amorphous reference is
+    absent - so None is the honest answer.
+    """
+    tt = np.linspace(5.0, 45.0, 400)
+    # Steep monotonic decay, as in the real q-space profiles, with a small peak.
+    y = 900.0 * np.exp(-0.03 * (tt - 5.0)) + 40.0 * np.exp(-0.5 * ((tt - 21.0) / 0.3) ** 2)
+    r = analyse_xrd(tt.tolist(), y.tolist(), wavelength_angstrom=1.541)
+    assert r.crystallinity_pct is None, r.crystallinity_pct
+    # The peak itself must still be found and indexed.
+    assert any(20.0 <= p <= 22.0 for p in r.peaks_two_theta), r.peaks_two_theta
+
+
+def test_crystallinity_index_still_reported_on_a_flat_baseline():
+    """A normal pattern with a flat baseline keeps a meaningful index."""
+    tt = np.linspace(5.0, 45.0, 400)
+    y = 100.0 + 900.0 * np.exp(-0.5 * ((tt - 21.0) / 0.35) ** 2)
+    r = analyse_xrd(tt.tolist(), y.tolist(), wavelength_angstrom=1.541)
+    assert r.crystallinity_pct is not None
+    assert 0.0 < r.crystallinity_pct <= 100.0
