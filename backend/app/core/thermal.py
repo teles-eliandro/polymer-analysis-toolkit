@@ -295,7 +295,6 @@ def _plateau_levels(
     measured width of the transition itself so that a narrow transition gets
     narrow windows and a broad one gets wide ones.
     """
-    n = T.size
     span = float(T[-1] - T[0])
     if span <= 0:
         return float(y[0]), float(y[-1])
