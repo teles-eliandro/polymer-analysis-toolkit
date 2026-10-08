@@ -46,6 +46,49 @@ __all__ = [
 #: while accepting every Tg that would be visible to an analyst.
 _MIN_TG_STEP_FRACTION = 0.03
 
+#: How symmetric the slopes either side of a candidate must be for it to count
+#: as a step rather than the flank of a peak. A glass transition changes the
+#: baseline level once, so the trace approaches and leaves it at comparable
+#: rates; one wall of a melting peak does not.
+#:
+#: Measured on a semicrystalline trace (Tg 75 C, Tm 170 C), the slope ratio
+#: either side of the true step is 0.99, while the best-scoring melting flank
+#: reaches only 0.35 no matter how the window is sized (0.12 at 12 C, 0.20 at
+#: 18 C, 0.31 at 24 C). Half sits in the empty gap between the two clusters.
+#: Do not lower this to 0.1-0.2: at those values a flank still passes and,
+#: being 30x the size of the step, it wins the ranking outright.
+_MIN_TG_SYMMETRY = 0.5
+
+#: Floor on the span used to judge whether a glass transition is significant,
+#: as a fraction of the whole scan's excursion. Excluding a melting peak can
+#: leave an almost flat background (0.09 W/g of a 3.0 W/g scan), and measuring
+#: the step against that would let noise pass as a transition. A tenth keeps the
+#: yardstick tied to the trace's real scale while still allowing a small Tg to
+#: be judged against the step-like background rather than against a large peak.
+_MIN_BACKGROUND_FRACTION = 0.1
+
+#: Width of the averaging window, in degrees Celsius, used to detect the glass
+#: transition step. A region of interest a few degrees wide: too narrow and a
+#: single-point derivative measures noise (a 0.1 C window on the real PCL scan
+#: made the slope test meaningless), too wide and a narrow transition is
+#: smoothed into its surroundings.
+_TG_WINDOW_C = 6.0
+
+#: How far either side of a candidate the slopes are compared, in degrees.
+#: This has to stay short. It exists to sample the local background just outside
+#: the transition; widen it and it reaches across a whole melting peak and
+#: averages the two walls together, so a point on one wall scores as symmetric
+#: (a 37 C span did exactly that on a Gaussian peak of sigma 8 C).
+_TG_SPAN_C = 12.0
+
+#: Fraction of a melting peak's height below which the excess over the fitted
+#: baseline is treated as baseline error rather than peak. Used to bound the
+#: region that counts as "the melting peak", both for the enthalpy integral and
+#: for the range the glass-transition search must avoid. A few percent keeps the
+#: whole peak while releasing the flat stretches of a scan where the local
+#: baseline simply sits a little low.
+_PEAK_FLOOR = 0.03
+
 
 @dataclass
 class TGAResult:
@@ -415,8 +458,17 @@ def _find_step_temperature(
     if n < 20:
         return None
 
-    win = max(5, int(0.03 * n))
-    # Skip the settling transient at each end of the scan.
+    # Window sizes are set in degrees, then converted to points. Sizing them as
+    # a fraction of the point count makes them depend on the sampling rate: a
+    # trace with 6846 points over 226 C (the real PCL scan) gets a 0.1 C window,
+    # which is a single-point derivative where the symmetry test measures noise
+    # rather than the shape of the transition. A glass transition is a few
+    # degrees wide whatever the instrument's sampling rate.
+    dT = float(T[-1] - T[0])
+    span = abs(dT) if dT != 0 else 1.0
+    per_deg = n / span
+    win = int(np.clip(round(_TG_WINDOW_C * per_deg), 5, max(5, n // 4)))
+    far = int(np.clip(round(_TG_SPAN_C * per_deg), win, max(win, n // 3)))
     margin = max(win, int(0.05 * n))
     scores = np.full(n, -np.inf)
     for i in range(win, n - win):
@@ -427,7 +479,41 @@ def _find_step_temperature(
             continue
         before = float(np.mean(y[i - win : i]))
         after = float(np.mean(y[i : i + win]))
-        scores[i] = abs(after - before)
+        step = abs(after - before)
+
+        # Reject the flank of a peak. The level change across a melting flank
+        # is large -- on a semicrystalline trace it measures ~32x the glass
+        # transition -- so ranking by step size alone picks the melting flank
+        # over the real Tg and reports a transition 100 C too high.
+        #
+        # What separates them is symmetry. A glass transition is a single,
+        # one-time change of level, so the trace rises into it and flattens out
+        # of it at comparable rates: the slope over a window on each side comes
+        # out of similar size. A peak flank is one wall of a transient event:
+        # the trace is steep on the side facing the peak and nearly flat on the
+        # other, and the two slopes differ by an order of magnitude.
+        #
+        # Measured on the semicrystalline trace below (Tg 75 C, Tm 170 C):
+        # the true step gives slopes 0.00061 / 0.00060 (ratio 0.99), while the
+        # melting flank at 175.7 C gives 0.00421 / 0.06217 (ratio 0.07) and the
+        # best flank of the peak never exceeds 0.35 however the window is sized.
+        #
+        # The slopes are measured over the whole trace, NOT clipped to the
+        # excluded range. Clipping cuts the window off at the edge of the
+        # exclusion, so only the flat side of a peak wall is sampled and the
+        # wall looks like a symmetric step -- which is how a fabricated Tg at
+        # 139.7 C survived on a trace that is nothing but a melting peak.
+        grad = np.gradient(y, T)
+        lo = max(0, i - far)
+        hi = min(n, i + far)
+        pre_slope = abs(float(np.mean(grad[lo : max(lo + 1, i - win)])))
+        post_slope = abs(float(np.mean(grad[min(i + win, hi) : hi])))
+        big = max(pre_slope, post_slope)
+        small = min(pre_slope, post_slope)
+        if big > 0 and small / big < _MIN_TG_SYMMETRY:
+            continue
+
+        scores[i] = step
 
     if not np.any(np.isfinite(scores)):
         return None
@@ -435,13 +521,40 @@ def _find_step_temperature(
     best = int(np.argmax(scores))
 
     # A step is only a glass transition if it is a meaningful fraction of the
-    # overall signal excursion. Without this test the routine always returns
+    # signal excursion. Without this test the routine always returns
     # *something*, so a sample with no glass transition (a pure melting trace)
     # gets a fabricated Tg drawn from residual curvature.
+    #
+    # The excursion is measured over the step-like part of the trace only. Using
+    # the full range lets a single large melting peak set the yardstick: on a
+    # semicrystalline trace with a 1.5 W/g peak and a 0.08 W/g glass transition,
+    # the true step is 0.00014 of the full range and failed a 0.03 floor, even
+    # though it is unmistakable in the data. Both traces must be judged against
+    # their own background, not against the largest event anywhere in the scan.
     before = float(np.mean(y[max(0, best - win) : best]))
     after = float(np.mean(y[best : best + win]))
     step_size = abs(after - before)
-    total_range = float(np.max(y) - np.min(y))
+
+    # Excursion of the step-like background: exclude the excluded (melting)
+    # range, then take the span of what remains.
+    #
+    # This must not become arbitrarily small. On a trace that is nothing but a
+    # melting peak, excluding the peak leaves an almost flat background whose
+    # span is ~0.09 W/g against a full range of 3.0; judging the step against
+    # that would let instrument noise be significant and fabricate a Tg. The
+    # background span is therefore floored at a fraction of the full excursion,
+    # so it can relax the gate for a genuine small Tg on a strongly melting
+    # sample without ever collapsing the yardstick to noise.
+    if exclude is not None:
+        keep = (T < exclude[0]) | (T > exclude[1])
+    else:
+        keep = np.ones(T.size, dtype=bool)
+    full_range = float(np.max(y) - np.min(y))
+    background = y[keep] if keep.any() else y
+    background_range = float(np.max(background) - np.min(background))
+    total_range = max(background_range, _MIN_BACKGROUND_FRACTION * full_range)
+    if total_range <= 0:
+        total_range = full_range
     if total_range <= 0:
         return None
     if step_size / total_range < _MIN_TG_STEP_FRACTION:
@@ -942,13 +1055,26 @@ def analyse_dsc(
         peak_h = float(excess[tm_idx])
         pos = excess > 0
         if pos.any() and peak_h > 0:
-            # Restrict to the contiguous region around the peak so that a
-            # separate event elsewhere does not contribute to this enthalpy.
+            # Restrict to the region around the peak so that a separate event
+            # elsewhere does not contribute to this enthalpy.
+            #
+            # "Excess positive" is too generous a bound. The fitted baseline
+            # dips below the signal over most of a scan, so on a semicrystalline
+            # trace the positive run reached from 74 C to 185 C -- it swallowed
+            # the glass transition at 75 C and every point between. That range
+            # is then handed to the Tg search as the region to exclude, so the
+            # real glass transition is excluded and a flank is reported instead.
+            #
+            # A melting peak only matters where it is a real fraction of its own
+            # height. Cutting at a few percent of the peak keeps the whole peak
+            # and its immediate flanks while releasing the flat regions where
+            # the baseline is merely fitting low.
+            thresh = _PEAK_FLOOR * peak_h
             a = tm_idx
-            while a > 0 and excess[a] > 0:
+            while a > 0 and excess[a] > thresh:
                 a -= 1
             b = tm_idx
-            while b < T.size - 1 and excess[b] > 0:
+            while b < T.size - 1 and excess[b] > thresh:
                 b += 1
             if b > a + 1:
                 area = float(np.trapezoid(excess[a : b + 1], T[a : b + 1]))
