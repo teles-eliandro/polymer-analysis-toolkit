@@ -219,6 +219,7 @@ export default function ThermalPanel() {
         <Formula
           name={t('thermal.f.res.name')}
           expression="residue (%) = m(T_final)"
+          symbols={[{ symbol: 'm', meaning: t('thermal.f.res.mf') }]}
           note={t('thermal.f.res.note')}
           reference="ISO 11358-1:2022 (residue determination). The residue includes any inorganic filler, ash or char, so it is an upper bound on the filler content, not a measurement of it."
         />
@@ -227,11 +228,16 @@ export default function ThermalPanel() {
           expression="m_smooth(T) = (1/w) Σ m(T_i)   over a window of w points, edge-padded"
           symbols={[{ symbol: 'w', meaning: t('thermal.f.smooth.w') }]}
           note={t('thermal.f.smooth.note')}
+          reference="A moving-average filter is the usual pre-treatment for a DTG curve (ISO 11358-1:2022, which permits smoothing provided its parameters are reported). It is a low-pass filter, so it suppresses sharp features along with the noise: widening w flattens a narrow decomposition step, and the smoothed curve must never be the one the residue is read from."
         />
         <Formula
           name={t('thermal.f.uniform.name')}
           expression="DTG computed on a uniform 1 °C grid after interpolation"
+          symbols={[
+            { symbol: 'DTG', meaning: t('thermal.f.uniform.dtg') },
+          ]}
           note={t('thermal.f.uniform.note')}
+          reference="ISO 11358-1:2022 requires the rate of mass loss to be reported against temperature on a defined basis. A finite difference taken on the raw, unevenly spaced axis is dominated by the shortest intervals — one noisy pair a hundredth of a degree apart yields a gradient of tens of percent per degree — so the trace is resampled onto a uniform grid first. The choice of grid step is then reported, because it sets the resolution of every DTG peak that follows."
         />
         <Formula
           name={t('thermal.f.dscpeak.name')}

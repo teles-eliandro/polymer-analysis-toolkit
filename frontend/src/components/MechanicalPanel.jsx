@@ -213,7 +213,13 @@ export default function MechanicalPanel() {
         <Formula
           name={t('mech.f.fit.name')}
           expression="E = Σ(εi − ε̄)(σi − σ̄) / Σ(εi − ε̄)²   (least squares)"
+          symbols={[
+            { symbol: 'E', meaning: t('mech.f.fit.E') },
+            { symbol: 'εi', meaning: t('mech.f.fit.eps') },
+            { symbol: 'σi', meaning: t('mech.f.fit.sig') },
+          ]}
           note={t('mech.f.fit.note')}
+          reference="ISO 527-1:2019, determination of tensile modulus. The standard fits the slope over a defined strain window (typically 0.05 % to 0.25 %) rather than the whole curve, because the toe region at the start of the test is seating compliance, not material stiffness."
         />
         <Formula
           name={t('mech.f.sigma.name')}
@@ -229,6 +235,11 @@ export default function MechanicalPanel() {
         <Formula
           name={t('mech.f.toughness.name')}
           expression="U = ∫ σ dε   (area under the stress-strain curve)"
+          symbols={[
+            { symbol: 'U', meaning: t('mech.f.toughness.U') },
+            { symbol: 'σ', meaning: t('mech.f.toughness.sig') },
+            { symbol: 'ε', meaning: t('mech.f.toughness.eps') },
+          ]}
           note={t('mech.f.toughness.note')}
           reference="ASTM D638-22, Annex on energy at break. The area is integrated over the strain range supplied, so a truncated curve underestimates toughness."
         />

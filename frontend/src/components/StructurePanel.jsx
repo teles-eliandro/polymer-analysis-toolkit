@@ -245,11 +245,20 @@ export default function StructurePanel() {
         <Formula
           name={t('structure.f.fwhm.name')}
           expression="β = 2·|2θ(half) − 2θ(peak)|   (half-width at half maximum, in radians)"
+          symbols={[
+            { symbol: 'β', meaning: t('structure.f.fwhm.beta') },
+            { symbol: '2θ', meaning: t('structure.f.fwhm.tt') },
+          ]}
           note={t('structure.f.fwhm.note')}
+          reference="The FWHM is the β that the Scherrer equation expects, and it must be corrected for instrumental broadening (β² = β_obs² − β_inst² for a Gaussian profile) before use. Without that correction the crystallite size is underestimated, and on a well-crystallised sample the instrumental contribution can be most of the observed width."
         />
         <Formula
           name={t('structure.f.xc.name')}
           expression="CI (%) = 100 · (A_crystalline) / (A_total)"
+          symbols={[
+            { symbol: 'A', meaning: t('structure.f.xc.A') },
+            { symbol: 'At', meaning: t('structure.f.xc.At') },
+          ]}
           note={t('structure.f.xc.note')}
           reference="Segal et al., 'An empirical method for estimating the degree of crystallinity of native cellulose using the X-ray diffractometer', Textile Research Journal 29 (1959) 786–794. Relative index only; it is not a mass fraction and is comparable only between patterns measured identically."
         />

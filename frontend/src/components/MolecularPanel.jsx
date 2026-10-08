@@ -394,12 +394,21 @@ export default function MolecularPanel() {
         <Formula
           name={t('mol.f.pdi.name')}
           expression="D = Mw / Mn   (dispersity, formerly polydispersity index)"
+          symbols={[
+            { symbol: 'D', meaning: t('mol.f.pdi.D') },
+            { symbol: 'Mw', meaning: t('mol.f.pdi.Mw') },
+            { symbol: 'Mn', meaning: t('mol.f.pdi.Mn') },
+          ]}
           note={t('mol.f.pdi.note')}
           reference="IUPAC recommends the term dispersity and the symbol D. A value below 1 is not a narrow distribution but an error in the data or the calculation."
         />
         <Formula
           name={t('mol.f.mz.name')}
           expression="Mz = sum(Ni Mi^3) / sum(Ni Mi^2)"
+          symbols={[
+            { symbol: 'Ni', meaning: t('mol.f.mz.Ni') },
+            { symbol: 'Mi', meaning: t('mol.f.mz.Mi') },
+          ]}
           note={t('mol.f.mz.note')}
           reference="The z-average is weighted towards the heaviest chains, so it responds to a high-mass tail that Mw barely registers."
         />
@@ -417,6 +426,9 @@ export default function MolecularPanel() {
         <Formula
           name={t('mol.f.gpc.name')}
           expression="log M = f(elution volume)   calibrated against narrow standards"
+          symbols={[
+            { symbol: 'M', meaning: t('mol.f.gpc.M') },
+          ]}
           note={t('mol.f.gpc.note')}
           reference="Conventional GPC calibration assumes the sample and the standards have the same hydrodynamic volume at a given elution volume. Reporting the result as absolute molar mass without a light-scattering or viscometry detector overstates what the measurement supports."
         />
@@ -425,6 +437,11 @@ export default function MolecularPanel() {
           expression={
             "w(log M) = (1 / (M sigma sqrt(2 pi))) exp( -(ln M - mu)^2 / (2 sigma^2) )"
           }
+          symbols={[
+            { symbol: 'w', meaning: t('mol.f.log.w') },
+            { symbol: 'sigma', meaning: t('mol.f.log.sigma') },
+            { symbol: 'mu', meaning: t('mol.f.log.mu') },
+          ]}
           note={t('mol.f.log.note')}
           reference="Schulz-Zimm and log-normal distributions are the usual models for a SEC trace; the log-normal is used here because its Mw/Mn follows directly from sigma."
         />
