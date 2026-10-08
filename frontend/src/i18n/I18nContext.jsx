@@ -50,7 +50,6 @@ const MESSAGES = {
     'structure.f.xc.A': 'Area of the crystalline reflections above the amorphous background.',
     'structure.f.xc.At': 'Total area of the pattern over the same angular range.',
     'thermal.f.res.mf': 'Mass at the end of the run, as a percentage of the starting mass.',
-    'thermal.f.smooth.w': 'Number of points in the moving-average window. Larger w means more smoothing.',
     'thermal.f.uniform.dtg': 'Rate of mass loss, in percent per degree Celsius.',
 
     'app.title': 'Polymer Analysis Toolkit',
@@ -150,7 +149,8 @@ const MESSAGES = {
     'thermal.f.res.name': 'Residue',
     'thermal.f.res.note': 'Read at the last temperature of the run, so it is instrument-range dependent. A run that ends at 600 °C and one that ends at 800 °C can report different residues for the same material.',
     'thermal.f.smooth.name': 'Smoothing',
-    'thermal.f.smooth.w': 'window length in points; an even value is reduced by one so the window stays centred',
+    'thermal.f.smooth.w':
+      'window length in points; a larger w means more smoothing, and an even value is reduced by one so the window stays centred',
     'thermal.f.smooth.note': 'Differentiation amplifies noise, so the mass curve is smoothed first. The default window of 11 points is a compromise: wider is steadier but merges closely spaced steps.',
     'thermal.f.uniform.name': 'Uneven temperature axis',
     'thermal.f.uniform.note': "Instrument exports are neither sorted nor evenly spaced: the same set-point is logged many times and the spacing varies within a run. Taking the derivative on that axis makes np.gradient divide by a zero-width interval and return NaN, and the peak search then reports the end of the scan. The trace is therefore sorted, samples sharing a temperature are averaged, and the derivative is taken on a uniform grid.",
@@ -381,7 +381,6 @@ const MESSAGES = {
     'structure.f.xc.A': 'Area das reflexoes cristalinas acima do fundo amorfo.',
     'structure.f.xc.At': 'Area total do padrao na mesma faixa angular.',
     'thermal.f.res.mf': 'Massa no fim do ensaio, como porcentagem da massa inicial.',
-    'thermal.f.smooth.w': 'Numero de pontos na janela da media movel. w maior significa mais suavizacao.',
     'thermal.f.uniform.dtg': 'Taxa de perda de massa, em porcento por grau Celsius.',
 
     'app.title': 'Polymer Analysis Toolkit',
@@ -712,7 +711,6 @@ const MESSAGES = {
     'structure.f.xc.A': 'Area de las reflexiones cristalinas sobre el fondo amorfo.',
     'structure.f.xc.At': 'Area total del patron en el mismo rango angular.',
     'thermal.f.res.mf': 'Masa al final del ensayo, como porcentaje de la masa inicial.',
-    'thermal.f.smooth.w': 'Numero de puntos en la ventana de media movil. Mayor w significa mas suavizado.',
     'thermal.f.uniform.dtg': 'Velocidad de perdida de masa, en porcentaje por grado Celsius.',
 
     'app.title': 'Polymer Analysis Toolkit',
