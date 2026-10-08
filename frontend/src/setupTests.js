@@ -4,6 +4,17 @@
 // imported transitively (react-plotly.js -> every panel), so the polyfills
 // have to be in place before any test module loads.
 import '@testing-library/jest-dom';
+import { TextDecoder as NodeTextDecoder, TextEncoder as NodeTextEncoder } from 'util';
+
+// jsdom does not provide TextEncoder/TextDecoder, and the results export
+// (services/zip.js) encodes file names and CSV with them. Node's own
+// implementations are the same API, so they are used directly.
+if (typeof global.TextEncoder === 'undefined') {
+  global.TextEncoder = NodeTextEncoder;
+}
+if (typeof global.TextDecoder === 'undefined') {
+  global.TextDecoder = NodeTextDecoder;
+}
 
 if (typeof window !== 'undefined') {
   if (!window.URL.createObjectURL) {

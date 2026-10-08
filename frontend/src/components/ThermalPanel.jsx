@@ -1,10 +1,18 @@
 /** Thermal module: TGA and DSC trace analysis. */
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import Plot from 'react-plotly.js';
 import { thermalApi, describeError } from '../services/api';
 import { useI18n } from '../i18n/I18nContext';
-import { Stat, StatGrid, DataTable, ErrorBanner, parseTwoColumns } from './ui';
+import {
+  Stat,
+  StatGrid,
+  DataTable,
+  ErrorBanner,
+  PlotExportButton,
+  ResultsBundleButton,
+  parseTwoColumns,
+} from './ui';
 import FileDrop from './FileDrop';
 import { Formula, FormulaDisclosure } from './Formula';
 
@@ -317,6 +325,7 @@ export default function ThermalPanel() {
 }
 
 function TgaResults({ data, t }) {
+  const plot = useRef(null);
   const stepRows = (data.steps || []).map((s, i) => ({ ...s, idx: i + 1 }));
   const traces = [
     {
@@ -369,6 +378,7 @@ function TgaResults({ data, t }) {
 
       <div className="plot">
         <Plot
+          ref={plot}
           data={traces}
           layout={{
             height: 380,
@@ -387,11 +397,34 @@ function TgaResults({ data, t }) {
           style={{ width: '100%' }}
         />
       </div>
+
+      <div className="export-buttons">
+        <PlotExportButton
+          plotRef={plot}
+          filename="tga-results"
+          label={t('common.downloadPng')}
+          failedLabel={t('common.downloadPngFailed')}
+        />
+        <ResultsBundleButton
+          plotRef={plot}
+          basename="tga"
+          results={data}
+          columns={['temperature_C', 'mass_pct', 'dtg_pct_per_C']}
+          rows={(data.temperature || []).map((T, i) => [
+            T,
+            (data.mass_pct || [])[i],
+            (data.dtg || [])[i],
+          ])}
+          label={t('common.downloadBundle')}
+          failedLabel={t('common.downloadBundleFailed')}
+        />
+      </div>
     </section>
   );
 }
 
 function DscResults({ data, t }) {
+  const plot = useRef(null);
   return (
     <section className="results">
       <h3>{t('common.results')}</h3>
@@ -417,6 +450,7 @@ function DscResults({ data, t }) {
 
       <div className="plot">
         <Plot
+          ref={plot}
           data={[
             {
               x: data.temperature,
@@ -435,6 +469,24 @@ function DscResults({ data, t }) {
           }}
           config={{ displayModeBar: false, responsive: true }}
           style={{ width: '100%' }}
+        />
+      </div>
+
+      <div className="export-buttons">
+        <PlotExportButton
+          plotRef={plot}
+          filename="dsc-results"
+          label={t('common.downloadPng')}
+          failedLabel={t('common.downloadPngFailed')}
+        />
+        <ResultsBundleButton
+          plotRef={plot}
+          basename="dsc"
+          results={data}
+          columns={['temperature_C', 'heat_flow_W_g']}
+          rows={(data.temperature || []).map((T, i) => [T, (data.heat_flow || [])[i]])}
+          label={t('common.downloadBundle')}
+          failedLabel={t('common.downloadBundleFailed')}
         />
       </div>
     </section>
