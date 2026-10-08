@@ -159,6 +159,28 @@ the modules, and confirm that a result renders.
   axios. Deployed on Vercel.
 - **CI** — GitHub Actions: ruff, pytest on Python 3.11 and 3.12, frontend build.
 
+### Vercel project settings
+
+`package.json` lives in `frontend/`, so the Vercel project must be configured
+with **Root Directory = `frontend`**. With the default (repository root) the
+install step runs at the root, finds no `package.json`, and every deployment
+fails before it produces a build — including preview builds, which is easy to
+miss because the GitHub Actions checks still pass.
+
+Two environment variables are needed:
+
+| Variable | Value |
+| --- | --- |
+| `REACT_APP_API_URL` | The deployed API origin, e.g. `https://polymer-analysis-toolkit.onrender.com` |
+| `CI` | `false` — Create React App treats warnings as errors when `CI=true` |
+
+Check that the deployed bundle points at the right API:
+
+```bash
+curl -s https://<your-app>.vercel.app/static/js/main.*.js \
+  | grep -o "https://[a-zA-Z0-9.-]*\.onrender\.com" | sort -u
+```
+
 ---
 
 ## 📄 Licence
