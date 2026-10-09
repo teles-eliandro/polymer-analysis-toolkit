@@ -125,6 +125,32 @@ ALIASES: dict[str, str] = {
     "peek": "PEEK",
     "ptfe": "PTFE",
     "pom-c": "POM",
+    # Longest-alias-first prefix matching means a longer alias always wins, so
+    # pa12/pa11 do not fall through to "pa" (PA6) and pps/psu/psu-v do not fall
+    # through to "pp" (PP) or "ps" (PS). Each of these is asserted in
+    # tests/test_reference_repertoire.py, which fails if an alias is shadowed.
+    "pa12": "PA12",
+    "nylon12": "PA12",
+    "nylon-12": "PA12",
+    "pa11": "PA11",
+    "nylon11": "PA11",
+    "nylon-11": "PA11",
+    "rilsan": "PA11",
+    "pps": "PPS",
+    "ryton": "PPS",
+    "psu": "PSU",
+    "udel": "PSU",
+    "pvdf": "PVDF",
+    "ldpe": "LDPE",
+    "hdpe": "HDPE",
+    "ectfe": "ECTFE",
+    "halar": "ECTFE",
+    "fep": "FEP",
+    "etfe": "ETFE",
+    "tefzel": "ETFE",
+    "pvc-u": "PVC-U",
+    "upvc": "PVC-U",
+    "teflon": "PTFE",
 }
 
 
@@ -617,6 +643,275 @@ REPERTOIRE: dict[str, Polymer] = {
                 "Brandrup et al., Polymer Handbook, 4th ed. (copolymer range "
                 "with ethylene content).",
                 method="DSC",
+            )
+        },
+    ),
+    # The three below were in the alias table with no entry behind them, so a
+    # sample named PEEK, PPSU or PTFE resolved to a key that did not exist and
+    # came back as "polymer was not identified" -- which reads as a failure to
+    # parse the name rather than an absence of data. They are high-temperature
+    # engineering polymers, the ones most likely to be measured by someone who
+    # needs the comparison, so the gap was worse than a missing entry: it
+    # misdescribed why the answer was not available.
+    "PEEK": Polymer(
+        key="PEEK",
+        names=("polyetheretherketone", "poly(ether ether ketone)", "peek"),
+        properties={
+            "Tg": PropertyRange(
+                140.0,
+                160.0,
+                "°C",
+                "Brandrup et al., Polymer Handbook, 4th ed.; consistent with "
+                "the Polyether Ether Ketone entry in the open polymer property "
+                "compilations (semantic-web polymer ontologies, CC-BY).",
+                method="DSC",
+                note=(
+                    "Semi-crystalline, so the Tg step is small and easy to "
+                    "miss: a PEEK trace with no detectable Tg is common and is "
+                    "not evidence of an instrument fault."
+                ),
+            ),
+            "Tm": PropertyRange(
+                330.0,
+                345.0,
+                "°C",
+                "Brandrup et al., Polymer Handbook, 4th ed.",
+                method="DSC",
+                note=(
+                    "Above the upper limit of many DSC cells. A scan that ends "
+                    "at 300 °C cannot report a PEEK melting point at all, so an "
+                    "absent Tm here is expected rather than anomalous."
+                ),
+            ),
+        },
+    ),
+    "PPSU": Polymer(
+        key="PPSU",
+        names=("polyphenylsulfone", "poly(phenyl sulfone)", "ppsu"),
+        properties={
+            "Tg": PropertyRange(
+                210.0,
+                230.0,
+                "°C",
+                "Brandrup et al., Polymer Handbook, 4th ed.; cross-checked "
+                "against the polysulfone entries of the open polymer property "
+                "compilations.",
+                method="DSC",
+            )
+        },
+    ),
+    "PTFE": Polymer(
+        key="PTFE",
+        names=(
+            "polytetrafluoroethylene",
+            "poly(tetrafluoroethylene)",
+            "ptfe",
+            "teflon",
+        ),
+        properties={
+            "Tm": PropertyRange(
+                320.0,
+                345.0,
+                "°C",
+                "Brandrup et al., Polymer Handbook, 4th ed.",
+                method="DSC",
+                note=(
+                    "Two crystal forms: the 19-30 °C transition is a solid-state "
+                    "crystal change, not a glass transition. A DSC endotherm "
+                    "there is not a Tg and must not be compared as one."
+                ),
+            ),
+        },
+    ),
+    "PSU": Polymer(
+        key="PSU",
+        names=("polysulfone", "psu", "udel"),
+        properties={
+            "Tg": PropertyRange(
+                180.0,
+                195.0,
+                "°C",
+                "Brandrup et al., Polymer Handbook, 4th ed.",
+                method="DSC",
+            )
+        },
+    ),
+    "PA12": Polymer(
+        key="PA12",
+        names=("polyamide 12", "nylon12", "nylon-12", "pa12"),
+        properties={
+            "Tm": PropertyRange(
+                175.0,
+                185.0,
+                "°C",
+                "Brandrup et al., Polymer Handbook, 4th ed.",
+                method="DSC",
+            ),
+            "Tg": PropertyRange(
+                35.0,
+                55.0,
+                "°C",
+                "Brandrup et al., Polymer Handbook, 4th ed.",
+                method="DSC",
+                note=(
+                    "The Tg is weak and sits near the start of a typical scan, "
+                    "so it is frequently invisible. The amide chains absorb "
+                    "water and a wet sample shifts it downward, which is why "
+                    "the range is wide."
+                ),
+            ),
+        },
+    ),
+    "PA11": Polymer(
+        key="PA11",
+        names=("polyamide 11", "nylon11", "nylon-11", "pa11", "rilsan"),
+        properties={
+            "Tm": PropertyRange(
+                185.0,
+                195.0,
+                "°C",
+                "Brandrup et al., Polymer Handbook, 4th ed.",
+                method="DSC",
+            )
+        },
+    ),
+    "PPS": Polymer(
+        key="PPS",
+        names=("polyphenylene sulfide", "poly(phenylene sulfide)", "pps", "ryton"),
+        properties={
+            "Tg": PropertyRange(
+                85.0,
+                100.0,
+                "°C",
+                "Brandrup et al., Polymer Handbook, 4th ed.",
+                method="DSC",
+            ),
+            "Tm": PropertyRange(
+                275.0,
+                290.0,
+                "°C",
+                "Brandrup et al., Polymer Handbook, 4th ed.",
+                method="DSC",
+            ),
+        },
+    ),
+    "PVDF": Polymer(
+        key="PVDF",
+        names=("polyvinylidene fluoride", "poly(vinylidene fluoride)", "pvdf"),
+        properties={
+            "Tm": PropertyRange(
+                155.0,
+                180.0,
+                "°C",
+                "Brandrup et al., Polymer Handbook, 4th ed. (range covers the "
+                "alpha and beta polymorphs).",
+                method="DSC",
+                note=(
+                    "Polymorph-dependent: the alpha phase melts near 170 °C and "
+                    "the beta phase near 160 °C, and the two overlap, so a "
+                    "single melting peak reports a mixture."
+                ),
+            ),
+            "Tg": PropertyRange(
+                -45.0,
+                -25.0,
+                "°C",
+                "Brandrup et al., Polymer Handbook, 4th ed.",
+                method="DSC",
+            ),
+        },
+    ),
+    "LDPE": Polymer(
+        key="LDPE",
+        names=("low-density polyethylene", "ldpe"),
+        properties={
+            "Tm": PropertyRange(
+                100.0,
+                115.0,
+                "°C",
+                "Brandrup et al., Polymer Handbook, 4th ed.",
+                method="DSC",
+                note=(
+                    "Distinct from HDPE, which melts 25-30 °C higher. Reporting "
+                    "one polyethylene range for both is the commonest error in "
+                    "polymer DSC, and the branch density that separates them is "
+                    "exactly what the melting point measures."
+                ),
+            ),
+        },
+    ),
+    "HDPE": Polymer(
+        key="HDPE",
+        names=("high-density polyethylene", "hdpe"),
+        properties={
+            "Tm": PropertyRange(
+                125.0,
+                140.0,
+                "°C",
+                "Brandrup et al., Polymer Handbook, 4th ed.",
+                method="DSC",
+            ),
+        },
+    ),
+    "ECTFE": Polymer(
+        key="ECTFE",
+        names=(
+            "ethylene chlorotrifluoroethylene",
+            "ethylene chlorotrifluoroethylene copolymer",
+            "ectfe",
+            "halar",
+        ),
+        properties={
+            "Tm": PropertyRange(
+                235.0,
+                250.0,
+                "°C",
+                "Brandrup et al., Polymer Handbook, 4th ed.",
+                method="DSC",
+            )
+        },
+    ),
+    "FEP": Polymer(
+        key="FEP",
+        names=("fluorinated ethylene propylene", "fep", "fep teflon"),
+        properties={
+            "Tm": PropertyRange(
+                250.0,
+                265.0,
+                "°C",
+                "Brandrup et al., Polymer Handbook, 4th ed.",
+                method="DSC",
+            )
+        },
+    ),
+    "ETFE": Polymer(
+        key="ETFE",
+        names=("ethylene tetrafluoroethylene", "etfe", "tefzel"),
+        properties={
+            "Tm": PropertyRange(
+                255.0,
+                275.0,
+                "°C",
+                "Brandrup et al., Polymer Handbook, 4th ed.",
+                method="DSC",
+            )
+        },
+    ),
+    "PVC-U": Polymer(
+        key="PVC-U",
+        names=("unplasticised pvc", "unplasticized pvc", "rigid pvc", "pvc-u", "upvc"),
+        properties={
+            "Tg": PropertyRange(
+                75.0,
+                85.0,
+                "°C",
+                "Brandrup et al., Polymer Handbook, 4th ed.",
+                method="DSC",
+                note=(
+                    "Unplasticised PVC. The entry for PVC covers the "
+                    "plasticised case; a plasticised compound has a Tg far "
+                    "below this range and belongs to the PVC entry."
+                ),
             )
         },
     ),
