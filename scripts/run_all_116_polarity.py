@@ -15,7 +15,6 @@ Tambem mede o tempo, para registrar o ganho do hoist do gradiente.
 """
 import glob
 import os
-import re
 import sys
 import time
 
