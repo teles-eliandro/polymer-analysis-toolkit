@@ -465,6 +465,36 @@ def analyse_ftir(
             "Absorbance must be non-negative. Convert transmittance with "
             "A = -log10(T) first."
         )
+    # Transmittance passed in place of absorbance is the commonest unit error
+    # here, because the instrument exports %T and the tool asks for absorbance.
+    # It used to be accepted silently and produced ~100 peaks per spectrum
+    # instead of ~16: a transmittance band is a large monotonic ramp, and the
+    # peak finder reads every ripple along it. Measured on the 59 real FTIR
+    # spectra from figshare 24593022, 57 of 58 gave an implausible count when
+    # passed as exported, against 48 of 52 once converted. A direct check on
+    # PE-1: 103 peaks starting at 3998 cm^-1 as %T, against exactly the four
+    # CH2 bands (2915, 2848, 1473, 730 cm^-1) as absorbance.
+    #
+    # What separates the two units is the scale, and it separates by a wide
+    # margin. Measured across those spectra:
+    #     transmittance: max 97-100, median ~94-99
+    #     absorbance   : max 0.07-4.2, median 0.00-0.02
+    # that is a factor of ~25 in the maximum with no overlap. A trend or slope
+    # test does not work -- a synthetic %T trace with a flat baseline and a real
+    # one give nearly the same trend ratio (0.074 vs 0.061), because the band
+    # structure dominates it.
+    #
+    # The threshold is set on the maximum only. Absorbance above 4 is not
+    # physically meaningful for a transmission measurement anyway (that is
+    # 0.01 %T), so refusing it costs nothing real, while no plausible
+    # absorbance spectrum reaches the 50 that this requires.
+    if x.size >= 10 and float(np.max(y)) > 50.0:
+        raise ValueError(
+            "This looks like transmittance, not absorbance: the values reach "
+            f"{float(np.max(y)):.1f}. Convert with A = -log10(T/100) before "
+            "calling this function, and drop any saturated point where T = 0 "
+            "or the logarithm is infinite."
+        )
     if np.ptp(x) <= 0:
         raise ValueError("Wavenumber values must not all be identical.")
 

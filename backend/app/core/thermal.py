@@ -74,6 +74,56 @@ _no_footing: ContextVar[bool] = ContextVar("_no_footing", default=False)
 #: being 30x the size of the step, it wins the ranking outright.
 _MIN_TG_SYMMETRY = 0.5
 
+#: How far the classical slope peak must stand above the trace's own median
+#: gradient to count as a transition. Guards the derivative-based candidate in
+#: ``_derivative_peak``: on a featureless scan the largest slope and the median
+#: slope are comparable, and the ratio falls near 1, so nothing is reported. A
+#: real glass transition on the figshare 24462004 traces measures 15-60x the
+#: median gradient.
+_MIN_DERIV_SIGNIFICANCE = 3.0
+
+#: Minimum width, in degrees Celsius, for a slope peak to be accepted as a
+#: glass transition by ``_derivative_peak``. A real glass transition keeps the
+#: slope elevated across a degree or more; the cell-switching transient at the
+#: start of a scan is one or two sample points wide and reaches a gradient over
+#: 1000x the trace median. Width is what separates them.
+_MIN_TG_WIDTH_C = 1.0
+
+#: How much of the scan's range the start-to-end level change must be for the
+#: trace to be treated as containing a step (a glass transition) rather than a
+#: peak (a melting endotherm). A melting-only scan returns to its starting
+#: level, so the change is 0; a scan with a glass transition ends at a
+#: different level, measuring 0.15 or more of the range on the test cases.
+_MIN_STEP_PERSISTENCE = 0.05
+
+#: How large a melting endotherm must be, as a fraction of the trace's own
+#: excursion, to be reported at all. Set from the figshare 24462004 set: real
+#: melting peaks measure 40-95 % of their scan's range, while the false
+#: positives produced by the chord residual on amorphous traces (polystyrene,
+#: which has no melting at all) sit under 10 %. Without this floor an amorphous
+#: sample reports a melting temperature, and that spurious melt_range then
+#: excludes the region containing the real glass transition.
+_MIN_PEAK_FRACTION = 0.15
+
+#: Half-width, in sample points, of the window used to test that a candidate
+#: melting peak actually has the shape of a peak (rising on one side, falling
+#: on the other). Only the sign of the mean slope on each side is used, so a
+#: generous window is fine and makes the test insensitive to single-point noise.
+_PEAK_FLANK_POINTS = 30
+
+#: How much of a candidate peak's own height must appear as a rise on its
+#: leading side for it to count as a melting endotherm. A decaying transient
+#: never rises, so the ratio is near zero; a real melting peak rises by roughly
+#: its own height. 0.3 separates them with margin on both sides.
+_MIN_PEAK_RISE = 0.3
+
+#: Degrees Celsius added to each side of the melting range before it is used to
+#: exclude candidates from the glass-transition search. The bound found by the
+#: excess walk sits on the melting peak's own shoulder, so a candidate just
+#: outside it is still on the flank. A fixed margin, because the flank width is
+#: a property of the transition and not of the peak height.
+_MELT_EXCLUDE_MARGIN_C = 5.0
+
 #: Floor on the span used to judge whether a glass transition is significant,
 #: as a fraction of the whole scan's excursion. Excluding a melting peak can
 #: leave an almost flat background (0.09 W/g of a 3.0 W/g scan), and measuring
@@ -442,6 +492,131 @@ def onset_temperature(
     return float(max(min(x_roi, max(lo, hi)), min(lo, hi)))
 
 
+def _step_at(T: np.ndarray, y: np.ndarray, i: int, win: int) -> float:
+    """Size of the level change at index *i*, measured over +/-*win* points."""
+    n = T.size
+    before = float(np.mean(y[max(0, i - win) : i]))
+    after = float(np.mean(y[i : min(n, i + win)]))
+    return abs(after - before)
+
+
+def _derivative_peak(
+    T: np.ndarray, y: np.ndarray, exclude: tuple[float, float] | None = None
+) -> int | None:
+    """Index of the fastest change of slope in the trace: the classical Tg.
+
+    The glass transition is where the heat flow changes slope most abruptly, so
+    it sits at the largest peak of ``|d(hf)/dT|``. This is the textbook
+    construction and it is used here as a candidate to complement the
+    window-mean ranking, which fails on traces that drift (see the caller).
+
+    The scan opens and closes with the cell settling, and that transient is the
+    largest slope change anywhere in the trace, so the first and last 5 % are
+    skipped -- the same guard the window-mean search uses. ``exclude`` removes
+    the melting range. The result is reported only when the slope peak stands
+    clearly above the trace's own background gradient, so a featureless scan
+    cannot yield a transition.
+    """
+    n = T.size
+    if n < 20:
+        return None
+
+    grad = np.abs(np.gradient(y, T))
+    margin = max(5, int(0.05 * n))
+    lo, hi = margin, n - margin
+    if hi <= lo:
+        return None
+
+    window = grad[lo:hi]
+    if exclude is not None:
+        inside = (T[lo:hi] >= exclude[0]) & (T[lo:hi] <= exclude[1])
+        window = np.where(inside, 0.0, window)
+    if not np.any(window > 0):
+        return None
+
+    # The start-of-scan transient is a single narrow spike: the cell is
+    # switched on and the signal jumps, producing the largest gradient in the
+    # whole trace. On the figshare 24462004 polystyrene trace it measures
+    # 1115x the median gradient at 0.1 C while the real glass transition at
+    # 105 C measures 21x -- so ranking by magnitude alone always picks the
+    # transient. A margin in points is no defence: the transient sits at 0 C,
+    # which on a -90..270 C scan is a quarter of the way in, well past any
+    # 5 % guard.
+    #
+    # A real glass transition is a *wide* feature: the slope stays elevated
+    # across several degrees. The switching transient is one or two points
+    # wide. Measuring how far the gradient stays above half its peak separates
+    # the two, so the search is restricted to candidates of physical width.
+    peak = float(np.max(window))
+    background = float(np.median(grad[lo:hi]))
+    if background > 0 and peak / background < _MIN_DERIV_SIGNIFICANCE:
+        return None
+    if peak <= 0:
+        return None
+
+    # Anything this far above the background is a candidate; the threshold is
+    # tied to the noise floor rather than to the strongest peak, because a
+    # switching transient can be 50x the real transition and would otherwise
+    # clip the search to itself.
+    floor = max(background * _MIN_DERIV_SIGNIFICANCE, peak * 1e-3)
+    order = np.argsort(window)[::-1]
+    for k in order:
+        if window[k] < floor:
+            break
+        i = lo + int(k)
+        # Never report a point inside the excluded (melting) range. Zeroing the
+        # gradient there and taking the global argmax was not enough: the
+        # largest of the *remaining* values sits on the edge of the exclusion,
+        # on the melting flank, which is exactly what the exclusion exists to
+        # avoid. On the figshare 24462004 PET trace (Tg 78 C, Tm 237 C) that
+        # returned 257 C -- the far shoulder of the melting peak.
+        if exclude is not None and exclude[0] <= float(T[i]) <= exclude[1]:
+            continue
+        # Width at half of *this candidate's* height, not of the global peak.
+        half = window[k] * 0.5
+        left = i
+        while left > lo and grad[left - 1] >= half:
+            left -= 1
+        right = i
+        while right < hi - 1 and grad[right + 1] >= half:
+            right += 1
+        if float(T[right] - T[left]) >= _MIN_TG_WIDTH_C:
+            candidate_ok = i if np.isfinite(grad[i]) else None
+        else:
+            continue
+        if candidate_ok is not None and _is_step_not_peak(T, y, candidate_ok):
+            return candidate_ok
+    return None
+
+
+def _is_step_not_peak(T: np.ndarray, y: np.ndarray, i: int) -> bool:
+    """Whether the signal at *i* settles at a new level (a step) or returns.
+
+    This is the test that separates a glass transition from a melting peak once
+    both have passed the magnitude and shape gates. Width does not do it: on
+    synthetic traces a melting Gaussian and a tanh glass transition of the same
+    height measure comparable half-widths (12.8 C against 14.0 C), so a width
+    threshold cannot tell them apart.
+
+    What does is where the signal ends up. A glass transition is a step: the
+    level before it and the level after it differ. A melting endotherm is a
+    peak: the signal comes back, so the scan finishes at the level it started.
+    Measured on those same two traces:
+        melting only ->  starts 0.500, ends 0.500   (|end - start| = 0.0000)
+        Tg only      ->  starts 0.200, ends 1.000   (|end - start| = 0.8000)
+
+    The start and end levels are medians over a tenth of the scan each, which is
+    robust to the settling transient at the very beginning.
+    """
+    n = T.size
+    span = max(5, n // 10)
+    start = float(np.median(y[:span]))
+    end = float(np.median(y[-span:]))
+    full_range = float(np.max(y) - np.min(y))
+    if full_range <= 0:
+        return False
+    return abs(end - start) / full_range >= _MIN_STEP_PERSISTENCE
+
 def _find_step_temperature(
     T: np.ndarray, y: np.ndarray, exclude: tuple[float, float] | None = None
 ) -> int | None:
@@ -497,6 +672,16 @@ def _find_step_temperature(
     far = int(np.clip(round(_TG_SPAN_C * per_deg), win, max(win, n // 3)))
     margin = max(win, int(0.05 * n))
     scores = np.full(n, -np.inf)
+
+    # The gradient of the whole trace is a constant of this call, but it used
+    # to be computed *inside* the loop below, once per candidate index: on a
+    # 16202-point scan that is ~16000 np.gradient calls of 16000 points each,
+    # which is where 36 of the 38 seconds per `.tri` file went (cProfile:
+    # 11795 calls, 1.9 s self time, 34 s cumulative). Hoisting it changes no
+    # arithmetic -- the same array, the same indexing -- and takes the whole
+    # analysis from 38 s to 2.7 s per file.
+    grad = np.gradient(y, T)
+
     for i in range(win, n - win):
         if i < margin or i > n - margin:
             continue
@@ -529,7 +714,6 @@ def _find_step_temperature(
         # exclusion, so only the flat side of a peak wall is sampled and the
         # wall looks like a symmetric step -- which is how a fabricated Tg at
         # 139.7 C survived on a trace that is nothing but a melting peak.
-        grad = np.gradient(y, T)
         lo = max(0, i - far)
         hi = min(n, i + far)
         pre_slope = abs(float(np.mean(grad[lo : max(lo + 1, i - win)])))
@@ -539,12 +723,66 @@ def _find_step_temperature(
         if big > 0 and small / big < _MIN_TG_SYMMETRY:
             continue
 
-        scores[i] = step
+        # Rank by how abrupt the change is, not by its size alone.
+        #
+        # Symmetry alone is not sufficient. The *centre* of a tanh-shaped ramp
+        # -- which is what a real melting transition looks like, not a Gaussian
+        # -- has equal slopes on both sides, so it scores ~0.99 symmetric and
+        # passes the test above. On a PLLA-like trace (Tg 85 C, Tm 170 C) that
+        # let the melting ramp be reported as the Tg at 166-170 C: its step
+        # over the 6 C window is larger than the glass transition's, so it won
+        # the ranking outright.
+        #
+        # What separates them is abruptness. A glass transition changes level
+        # over a degree or two; a melting ramp spreads over many. Measured on
+        # that trace: the true Tg reaches a local gradient of 0.0200 W/g/K
+        # while the melting ramp peaks at 0.0047 -- a factor of 4.3 -- even
+        # though the ramp's *step* is 1.9x the step's.
+        #
+        # A change spread evenly over the averaging window has gradient
+        # step / window; the ratio of the actual gradient to that is how much
+        # sharper than "evenly spread" the transition is. Ranking by
+        # step * sharpness puts the Tg first on that trace by 4.2x.
+        win_span = abs(float(T[min(i + win, n - 1)] - T[i - win]))
+        even_grad = step / win_span if win_span > 0 else 0.0
+        local_grad = abs(float(grad[i]))
+        sharpness = local_grad / even_grad if even_grad > 0 else 1.0
+        scores[i] = step * sharpness
 
     if not np.any(np.isfinite(scores)):
         return None
 
     best = int(np.argmax(scores))
+
+    # The window-mean ranking above is not sufficient on real traces.
+    #
+    # On the figshare 24462004 set it recovers the glass transition of PS
+    # (step/noise 0.99 symmetric) but rejects PVC, PC and ABS outright: their
+    # traces carry a strong baseline slope, so the window *before* the
+    # transition also has a large gradient from the instrument drift alone and
+    # the symmetry test -- which exists to reject a melting flank -- rejects
+    # the glass transition instead. Measured symmetry at the true Tg:
+    #     PS 0.99 (passes)   PC 0.39   PVC 0.29   ABS 0.16   (all rejected)
+    # Detrending does not fix it either (PVC falls to 0.14).
+    #
+    # What does find all four is the classical construction: the glass
+    # transition is where the *slope* of the trace changes fastest, i.e. the
+    # peak of |d(hf)/dT|. Measured on the same traces it lands at
+    #     PS 102-107   PVC 82-86   PC 144-150   ABS 100-102
+    # against published values of 100, 80, 147 and 105 C.
+    #
+    # So the derivative peak is used as a *candidate* rather than as the
+    # answer: it is scored with the same asymmetric/cumulative machinery as
+    # everything else and compared against the window-mean winner. The
+    # symmetry gate is not applied to it, because that gate is precisely what
+    # is wrong on a drifting baseline; the significance floor still is, so a
+    # flat trace with no transition cannot produce a fabricated Tg.
+    deriv_i = _derivative_peak(T, y, exclude)
+    if deriv_i is not None and deriv_i != best:
+        d_step = _step_at(T, y, deriv_i, win)
+        b_step = _step_at(T, y, best, win)
+        if d_step > b_step:
+            best = deriv_i
 
     # A step is only a glass transition if it is a meaningful fraction of the
     # signal excursion. Without this test the routine always returns
@@ -636,7 +874,59 @@ def _find_peak_temperature(T: np.ndarray, y: np.ndarray) -> int | None:
     refined = int(np.nanargmax(excess))
     # The refinement is only trusted when it moves the peak onto a region the
     # baseline actually excluded; otherwise keep the rough estimate.
-    return refined if abs(excess[refined]) >= abs(excess[rough]) else rough
+    candidate = refined if abs(excess[refined]) >= abs(excess[rough]) else rough
+
+    # Significance. An amorphous polymer has no melting endotherm at all, but
+    # the chord residual on a monotonic trace is positive over most of the
+    # range, so some index always wins the argmax. On the figshare 24462004
+    # polystyrene trace (Tg 105 C, no melting) that produced a "melting peak"
+    # at 109.7 C whose excess was 8 % of the trace's own excursion -- and,
+    # worse, it then defined the melt_range handed to the glass-transition
+    # search, which excluded the real Tg region and left the sample with no
+    # glass transition reported.
+    #
+    # A real melting endotherm is a large excursion in its own trace. Requiring
+    # a fixed fraction of the full range separates the two: measured on this
+    # set the true melting peaks are 40-95 % of the range, while the amorphous
+    # false positives sit under 10 %.
+    full_range = float(np.nanmax(y) - np.nanmin(y))
+    peak_excess = abs(float(excess[candidate]))
+    if full_range > 0 and peak_excess / full_range < _MIN_PEAK_FRACTION:
+        return None
+
+    # Shape test on the refined candidate. A melting endotherm is a peak: the
+    # excess rises into it and falls away after. The switching transient at the
+    # start of a scan has no apex at all -- the excess is maximal at the very
+    # beginning of the scan and decays from there. On the figshare 24462004 PVC
+    # trace (amorphous, glass transition at 82 C, no melting) that transient
+    # gives a candidate at 14.6 C whose excess is 50 % of the trace range, so
+    # the magnitude floor above lets it through.
+    #
+    # The window must be wide enough to see the rise. Measured over 30 points
+    # around that candidate the excess is flat to 2e-7 -- neither a peak nor a
+    # visible slope -- but over 10 % of the scan the decay is unmistakable.
+    # So the slopes are compared over a fraction of the trace, and the test is
+    # one-sided: a real peak needs a clearly rising side, and anything whose
+    # excess never rises as the scan proceeds is not an endotherm.
+    span = max(_PEAK_FLANK_POINTS, n // 10)
+    lo = max(0, candidate - span)
+    hi = min(n, candidate + span + 1)
+    if hi - lo > 8:
+        left = excess[lo:candidate]
+        right = excess[candidate:hi]
+        if left.size > 2 and right.size > 2:
+            rise = float(np.nanmax(left) - np.nanmin(left))
+            fall = float(np.nanmax(right) - np.nanmin(right))
+            scale = max(peak_excess, 1e-12)
+            # A peak of this height must show a rise of comparable size on its
+            # leading side. A decaying transient shows almost none.
+            if rise / scale < _MIN_PEAK_RISE:
+                return None
+            if fall / scale < _MIN_PEAK_RISE and rise > 0:
+                # Flat-topped plateau rather than a peak: reject only when the
+                # trailing side does not come back down either.
+                return None
+    return candidate
 
 
 def inflection_temperature(
@@ -1003,6 +1293,37 @@ def analyse_tga(
             "per-step onsets."
         )
 
+    # Physical plausibility of the input, which the analysis otherwise takes on
+    # trust. A thermobalance cannot weigh a negative mass, and a run that
+    # starts below 100 % has lost sample before the ramp -- both are real in
+    # the figshare 24595695 TGA-FTIR set, where seven of 27 files end at
+    # -0.35 to -1.41 % and report that as the residue. The number is passed
+    # through unchanged (it is what the instrument wrote, and silently
+    # clamping it to zero would hide an instrument fault the analyst needs to
+    # see), but the analyst is told, because "residue = -1.4 %" is otherwise
+    # accepted as a measurement when it is not one.
+    if residue < 0.0:
+        notes.append(
+            f"The trace ends at {residue:.2f} % mass, which is negative and "
+            "therefore not a physical residue. This is the instrument's own "
+            "value, reported unchanged; the run either drifted or was "
+            "mis-zeroed. Do not quote this as a residue."
+        )
+    elif residue > 105.0:
+        notes.append(
+            f"The trace ends at {residue:.2f} % mass, above the starting "
+            "value. Buoyancy or a mis-zeroed balance is the usual cause; "
+            "treat the residue as unquantified."
+        )
+    start_pct = float(m_smooth[0])
+    if abs(start_pct - 100.0) > 5.0:
+        notes.append(
+            f"The trace starts at {start_pct:.1f} % rather than 100 %. It is "
+            "normalised to its own first point, so the percentage axis is "
+            "relative; a run that begins this far from 100 % has already lost "
+            "volatiles before the ramp."
+        )
+
     return TGAResult(
         Td_5pct=Td5,
         Td_10pct=Td10,
@@ -1095,12 +1416,41 @@ def analyse_dsc(
             # height. Cutting at a few percent of the peak keeps the whole peak
             # and its immediate flanks while releasing the flat regions where
             # the baseline is merely fitting low.
+            #
+            # The walk also stops at a real valley. A fixed fraction is not
+            # enough on its own, because a glass transition sitting below the
+            # melting peak is itself an excess over the fitted baseline: a step
+            # of 0.02 W/g against a peak of 0.10 W/g is 20 % of the height, well
+            # above a 3 % floor. The walk then ran down to 74 C on a trace whose
+            # Tg is at 75 C, and that range is handed to the glass-transition
+            # search as the region to avoid -- so the real transition was
+            # excluded and a melting flank was reported instead.
+            #
+            # The valley test needs the excess to have actually fallen before a
+            # valley is accepted. A shallow tanh-shaped melting transition --
+            # the shape a real DSC melting ramp has -- peaks at its apex, so the
+            # first step outward is already "not rising" and the naive test
+            # collapsed the melt range to a single point (178.5-178.6 C),
+            # leaving the whole flank exposed to the Tg search.
             thresh = _PEAK_FLOOR * peak_h
+            valley_level = 0.25 * peak_h
             a = tm_idx
-            while a > 0 and excess[a] > thresh:
+            while a > 1 and excess[a] > thresh:
+                if (
+                    excess[a] <= valley_level
+                    and excess[a] < excess[a - 1]
+                    and excess[a] <= excess[a + 1]
+                ):
+                    break
                 a -= 1
             b = tm_idx
-            while b < T.size - 1 and excess[b] > thresh:
+            while b < T.size - 2 and excess[b] > thresh:
+                if (
+                    excess[b] <= valley_level
+                    and excess[b] < excess[b - 1]
+                    and excess[b] <= excess[b + 1]
+                ):
+                    break
                 b += 1
             if b > a + 1:
                 area = float(np.trapezoid(excess[a : b + 1], T[a : b + 1]))
@@ -1118,7 +1468,19 @@ def analyse_dsc(
     # Searched on the signal with the melting region excluded, using the
     # step-level discriminator so that a melting peak is never reported as Tg.
     # ASTM D3418 locates Tg from the step, not from the maximum slope.
-    tg_idx = _find_step_temperature(T, hf_s, exclude=melt_range)
+    # The melting region is widened by a margin before it is used as the
+    # exclusion. The walk that bounds it stops where the excess falls to a few
+    # percent of the peak, which lands on the peak's own shoulder; a candidate
+    # a tenth of a degree outside that bound is still on the melting flank, and
+    # the glass-transition search then reports it. On the figshare 24462004 PET
+    # trace (Tg 78 C, Tm 237 C) the melt_range came out as 122.5-256.9 and the
+    # detector returned 257.0 -- the far shoulder of the melting peak, and a
+    # Tg 180 C too high. The margin is a fixed few degrees because the flank
+    # width does not scale with the peak.
+    exclude_range = melt_range
+    if melt_range is not None:
+        exclude_range = (melt_range[0] - _MELT_EXCLUDE_MARGIN_C, melt_range[1] + _MELT_EXCLUDE_MARGIN_C)
+    tg_idx = _find_step_temperature(T, hf_s, exclude=exclude_range)
     if tg_idx is not None:
         t_g_step = float(T[tg_idx])
         # Onset and end by the tangent construction on the step.
@@ -1209,18 +1571,41 @@ def _tg_footing(
 
     rng = np.random.default_rng(seed)
     found: list[float] = []
+    # Perturbation model: additive noise, not resampling with replacement.
+    #
+    # Resampling points with replacement (`rng.integers(0, n, n)`, the usual
+    # bootstrap) is the wrong model here and it broke on real data. It discards
+    # ~36 % of the points and leaves the temperature axis full of holes -- on a
+    # 5882-point PLLA scan, 936 gaps wider than twice the original spacing,
+    # some 9x wider. The detector then reads a trace no instrument produced and
+    # returns a Tg that swings by tens of degrees.
+    #
+    # Measured on that same PLLA_25K trace, whose Tg step has a
+    # signal-to-noise of 238:
+    #     destructive bootstrap -> +-35.91 K   (false alarm: "not reliable")
+    #     additive noise        -> +-0.03 K    (the correct answer)
+    #
+    # An instrument does not re-draw which temperatures it visits; it keeps the
+    # axis and adds noise to the signal. So that is what the resample does. The
+    # sigma is the trace's own local noise, estimated from the point-to-point
+    # difference via the median absolute deviation, which is robust to the real
+    # transitions (those are smooth and affect few points).
+    if n > 2:
+        diffs = np.diff(hf)
+        mad = float(np.median(np.abs(diffs - np.median(diffs))))
+        sigma = 1.4826 * mad / np.sqrt(2.0)
+        if not np.isfinite(sigma) or sigma <= 0:
+            sigma = float(np.std(diffs) / np.sqrt(2.0))
+    else:
+        sigma = 0.0
+    if not np.isfinite(sigma) or sigma <= 0:
+        return None
+
     for _ in range(repeats):
-        idx = np.sort(rng.integers(0, n, n))
-        Tb = T[idx]
-        # A resample can repeat a temperature; interpolation-free detection
-        # needs a strictly usable axis.
-        keep = np.concatenate(([True], np.diff(Tb) > 0))
-        Tb, hb = Tb[keep], hf[idx][keep]
-        if Tb.size < 20:
-            continue
+        perturbed = hf + rng.normal(0.0, sigma, n)
         token = _no_footing.set(True)
         try:
-            r = analyse_dsc(list(Tb), list(hb), heating_rate=heating_rate)
+            r = analyse_dsc(list(T), list(perturbed), heating_rate=heating_rate)
         except (ValueError, IndexError):
             continue
         finally:

@@ -1,0 +1,64 @@
+116 arquivos
+
+lidos: 116   falhas: 0   tempo: 637.5s (5.50s/arquivo)
+
+=== TG ===
+  dentro da janela: 36   fora: 71
+
+=== TM ===
+  dentro: 52   fora: 6   nao reportado: 21
+
+=== por familia ===
+fam         n Tg (min..max)          Tm (min..max)          sinal
+ABS         6 94.0..103.0            -90.1..-90.1           {1, -1}
+EVA         6 39.7..241.9            47.4..54.0             {1, -1}
+EVOH       10 47.3..134.0            159.3..185.6           {-1}
+NYLON       8 175.0..266.4           217.9..262.6           {-1}
+PAN         1 271.6..271.6           285.5..285.5           {1}
+PBT         2 -                      224.4..225.5           {-1}
+PC          2 139.9..142.9           -                      {-1}
+PE         20 34.9..141.5            105.0..139.6           {-1}
+PE-NEW      2 36.9..39.8             110.2..111.0           {-1}
+PET         5 126.9..271.3           237.1..255.4           {-1}
+PHB         2 62.9..63.8             169.9..173.7           {-1}
+PK          1 -                      221.3..221.3           {-1}
+PLA         2 61.2..62.4             149.1..151.2           {-1}
+PMMA       11 93.2..110.0            -90.1..-90.1           {1}
+PP         14 160.2..252.5           155.8..171.2           {-1}
+PS          9 74.5..105.7            75.9..235.2            {1, -1}
+PU          2 68.4..228.2            -                      {1, -1}
+PVAC        2 39.4..46.8             -                      {1, -1}
+PVC         3 64.4..83.3             -                      {-1}
+PVOH        6 166.7..209.8           246.6..246.6           {-1}
+SAN         2 91.3..97.1             -90.1..-90.1           {1}
+
+=== Tm que ainda erram (candidatos a bug restante) ===
+  EVA1-AR.tri            fam=EVA     Tm=    54.0 esperado (60,110)
+  EVA1-cryo.tri          fam=EVA     Tm=    52.5 esperado (60,110)
+  EVA2-cryo.tri          fam=EVA     Tm=    47.4 esperado (60,110)
+  PET1-AR.tri            fam=PET     Tm=   237.1 esperado (240,265)
+  PLA1-AR.tri            fam=PLA     Tm=   151.2 esperado (160,185)
+  PLA1-CRYO.tri          fam=PLA     Tm=   149.1 esperado (160,185)
+
+=== Tm nao reportado (esperado existir) ===
+  EVA2-AR.tri            fam=EVA
+  EVA3-AR.tri            fam=EVA
+  EVA3-CRYO.tri          fam=EVA
+  Nylon6-AR_dried.tri    fam=NYLON
+  Nylon66-Cyro-dried.tri fam=NYLON
+  PE2-AR.tri             fam=PE
+  PE2-CRYO.tri           fam=PE
+  PE3-AR.tri             fam=PE
+  PE5-AR.tri             fam=PE
+  PET2-AR.tri            fam=PET
+  PET3-AR.tri            fam=PET
+  PET3-CRYO.tri          fam=PET
+  PP1-CRYO.tri           fam=PP
+  PP2-CRYO.tri           fam=PP
+  PU1-AR.tri             fam=PU
+  PU1-CRYO.tri           fam=PU
+  PVOH1-CRYO.tri         fam=PVOH
+  PVOH2-AR.tri           fam=PVOH
+  PVOH2-CRYO.tri         fam=PVOH
+  PVOH3-AR.tri           fam=PVOH
+  PVOH3-CRYO.tri         fam=PVOH

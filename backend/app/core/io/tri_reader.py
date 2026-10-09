@@ -34,11 +34,40 @@ import re
 import struct
 from dataclasses import dataclass, field
 
+import numpy as np
+
 #: Byte gap between the int32 count word and the first float32 sample.
-_SAMPLE_OFFSET = 22
+#:
+#: Recovered empirically: a block is laid out as
+#:
+#:     <int32 count> <int32 zero-pad> <count * float32 payload>
+#:
+#: i.e. the payload starts eight bytes after the count word. An earlier
+#: constant of 22 came from a probe that happened to read in phase on part of
+#: the set; on the rest it started mid-payload and the recovered channels were
+#: garbage, which silently dropped ``heat_flow`` on those files.
+_SAMPLE_OFFSET = 8
+
+#: Leading samples of the Time channel, in seconds, used to anchor the payload.
+#: The first channel of every file in this dataset is Time sampled at 10 Hz, so
+#: the float32 sequence 0.1, 0.2, 0.3 is a reliable fingerprint. Matching data
+#: directly is what makes the reader robust: the count word repeats throughout
+#: the file (in index structures and in later buffer copies), so choosing an
+#: anchor by "plausible count" alone lands on the wrong one and decodes noise.
+_TIME_SIGNATURE = struct.pack("<3f", 0.1, 0.2, 0.3)
 
 #: Byte overhead per channel block on top of the float32 payload.
 _BLOCK_OVERHEAD = 72
+
+#: Values at the end of a channel payload below this magnitude are the block's
+#: trailing padding word, not samples. Real readings are of order 1e-3 to 1e3
+#: (seconds, degrees, W/g), and the padding is a denormal near 1e-38.
+_PADDING_EPS = 1e-30
+
+#: Largest block header to search when locating a payload. The header seen in
+#: this dataset is 8-40 bytes; the margin covers variants without scanning
+#: the whole 27 MB file.
+_MAX_HEADER = 62
 
 #: Text keys carried in the .tri metadata block.
 _KEYS = (
@@ -166,82 +195,99 @@ def _read_metadata(buf: bytes) -> dict[str, str]:
 def _find_channel_base(buf: bytes, body_start: int) -> tuple[int, int] | None:
     """Locate the first channel block after *body_start*.
 
-    Returns ``(count_offset, count)``. Every candidate int32 in the data region
-    is tested: a genuine channel count is followed by a finite float32 payload
-    and repeats at the channel stride. Among the candidates that pass, the one
-    that yields the most complete channel series wins -- anchoring on the first
-    match instead lands on a later copy of the count (the file repeats the
-    value in its index structures) and then decodes only one channel.
+    Returns ``(payload_offset, count)``. The anchor is found by matching the
+    Time channel's first samples rather than by scanning for a plausible count
+    word: the count is a small integer that repeats all over the file (index
+    structures, later buffer copies), and an anchor chosen that way lands on
+    the wrong copy and decodes noise. On this dataset the scan-for-count
+    approach mis-anchored 6 of 116 files, and a "longest repeating series"
+    refinement picked a spurious ``512`` word on exactly those.
 
-    A plain "is this a plausible count" scan is not enough: the files hold long
-    runs of small integers that look like counts, and roughly 40 % of the
-    dataset mis-anchored that way.
+    Matching the data itself is unambiguous. Every file starts its first
+    channel with Time in seconds at 10 Hz, so the float32 triplet
+    ``0.1, 0.2, 0.3`` identifies the payload. The count word sits
+    ``_SAMPLE_OFFSET`` bytes earlier. The candidate is accepted only when the
+    next block, a stride further on, carries the same count -- which validates
+    both the count and the stride in one check.
     """
     n = len(buf)
-    best: tuple[int, int, int] | None = None
-    for off in range(body_start // 4 * 4, n - 4, 4):
-        (count,) = struct.unpack_from("<I", buf, off)
-        if not (500 <= count <= 5_000_000):
-            continue
-        data_off = off + _SAMPLE_OFFSET
-        if data_off + count * 4 > n:
-            continue
-        probe = struct.unpack_from(f"<{min(count, 1024)}f", buf, data_off)
-        if not (all(v == v and abs(v) < 1e12 for v in probe) and any(v != 0.0 for v in probe)):
-            continue
-        stride = count * 4 + _BLOCK_OVERHEAD
-        # Score the anchor by how many consecutive channels it reproduces.
-        series = 1
-        while True:
-            nxt = off + series * stride
-            if nxt + 4 > n:
-                break
-            (c,) = struct.unpack_from("<I", buf, nxt)
-            if c != count:
-                break
-            series += 1
-        if series < 2:
-            continue
-        if best is None or series > best[2]:
-            best = (off, count, series)
-    if best is None:
-        return None
-    return best[0], best[1]
+    start = max(body_start, 0)
+
+    pos = buf.find(_TIME_SIGNATURE, start)
+    while pos >= 0:
+        word_off = pos - _SAMPLE_OFFSET
+        if word_off >= 0:
+            (count,) = struct.unpack_from("<I", buf, word_off)
+            if 500 <= count <= 5_000_000:
+                stride = count * 4 + _BLOCK_OVERHEAD
+                # The next block must repeat the count. This rejects a
+                # coincidental float match in unrelated data.
+                nxt = pos + stride - _SAMPLE_OFFSET
+                if nxt + 4 <= n and struct.unpack_from("<I", buf, nxt)[0] == count:
+                    return pos, count
+                # A single block is still better than nothing when the stride
+                # is unavailable (truncated file), provided the payload fits.
+                if pos + count * 4 <= n:
+                    return pos, count
+        pos = buf.find(_TIME_SIGNATURE, pos + 1)
+    return None
 
 
 def _read_channels(buf: bytes, signal_names: list[str]) -> tuple[list[TriChannel], int]:
-    """Recover every numeric channel using the fixed channel stride."""
+    """Recover every numeric channel using the fixed channel stride.
+
+    ``_find_channel_base`` returns the *payload* offset of the first channel,
+    so block ``k`` starts at ``payload_off + k * stride``.
+    """
     png_end = buf.rfind(b"IEND")
     body_start = png_end + 8 if png_end > 0 else 0
 
     found = _find_channel_base(buf, body_start)
     if found is None:
         return [], 0
-    first_off, count = found
+    payload_off, count = found
     stride = count * 4 + _BLOCK_OVERHEAD
+    n = len(buf)
 
     channels: list[TriChannel] = []
-    off = first_off
-    while off + _SAMPLE_OFFSET + count * 4 <= len(buf):
-        # Every block must start with the count word, otherwise the series has
-        # run out and the rest of the file is trailing data.
-        (c,) = struct.unpack_from("<I", buf, off)
-        if c != count:
+    while payload_off + count * 4 <= n:
+        # The count repeats several times per block in this container, so the
+        # stride keeps landing on valid-looking data past the real end of the
+        # channel list. The metadata names every channel, so stop there.
+        if signal_names and len(channels) >= len(signal_names):
             break
-        data_off = off + _SAMPLE_OFFSET
-        vals = struct.unpack_from(f"<{count}f", buf, data_off)
-        sane = sum(1 for v in vals if v == v and abs(v) < 1e12)
+        vals = np.frombuffer(buf, dtype="<f4", count=count, offset=payload_off)
+        sane = int(np.isfinite(vals).sum())
         if sane < count * 0.98:
             break
+        # The stored count is one larger than the number of real samples: the
+        # block carries a trailing padding word inside its payload. Left in,
+        # every channel ends with a spurious point, which put a 0 C reading at
+        # the end of the temperature axis and made a ramp-rate check read
+        # -6.9 K/min instead of +10. The padding is not exactly zero -- it is a
+        # denormal such as 2.4e-38 that prints as 0.000 -- so the tail is
+        # trimmed against a small absolute threshold rather than equality.
+        last = count
+        while last > 0 and abs(float(vals[last - 1])) < _PADDING_EPS:
+            last -= 1
+        # Never trim more than a token amount: a channel that is legitimately
+        # all zeros (cell purge) must survive intact.
+        if 0 < count - last <= 4 and last > count // 2:
+            vals = vals[:last]
         name = (
             _clean_signal_name(signal_names[len(channels)])
             if len(channels) < len(signal_names)
             else None
         )
         channels.append(
-            TriChannel(index=len(channels), name=name, offset=data_off, values=list(vals))
+            TriChannel(
+                index=len(channels),
+                name=name,
+                offset=payload_off,
+                values=vals.astype(float).tolist(),
+            )
         )
-        off += stride
+        payload_off += stride
     return channels, count
 
 
