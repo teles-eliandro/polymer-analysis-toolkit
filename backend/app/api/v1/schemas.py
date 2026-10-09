@@ -416,8 +416,95 @@ class XRDInput(BaseModel):
 
 
 # --------------------------------------------------------------------------
-# Errors
+# Trace file import
 # --------------------------------------------------------------------------
+
+
+class TraceColumn(BaseModel):
+    """Uma coluna lida de um arquivo de instrumento."""
+
+    index: int
+    header: str
+    role: str | None = Field(
+        None,
+        description=(
+            "What the column holds: temperature, heat_flow, mass, stress, ... "
+            "null when the label could not be matched."
+        ),
+    )
+    unit: str | None = None
+    n_values: int
+
+
+class TracePreview(BaseModel):
+    """
+    Um arquivo de instrumento lido, sem calcular nada.
+
+    Existe para o mesmo propósito que ``ImportPreview`` no módulo molecular:
+    tornar visível o que o importador decidiu, em vez de devolver só o
+    resultado final. Quando um número sai estranho, a causa costuma estar
+    aqui.
+    """
+
+    columns: list[TraceColumn]
+    metadata: dict[str, str] = Field(
+        default_factory=dict,
+        description="The instrument's own header, keyed by lower-cased name.",
+    )
+    sample_name: str | None = None
+    sample_mass_mg: float | None = None
+    heating_rate_K_min: float | None = Field(
+        None,
+        description=(
+            "Read from the instrument method. Required for an enthalpy in "
+            "J/g: without it the integral can only be reported per degree."
+        ),
+    )
+    exothermic_direction: str | None = Field(
+        None, description="'up', 'down', or null when the file does not say."
+    )
+    notes: list[str] = Field(
+        default_factory=list, description="Decisions taken while reading."
+    )
+    #: Present when the file resolved onto the requested x/y roles.
+    temperature: list[float] | None = None
+    signal: list[float] | None = None
+    x_label: str | None = None
+    y_label: str | None = None
+    sample_size_points: int | None = Field(
+        None,
+        description=(
+            "How many points the trace carries. A DSC run needs tens of "
+            "points per degree for a transition to be located; a file with a "
+            "few hundred points over a wide range cannot support a transition "
+            "temperature whatever the analysis does."
+        ),
+    )
+    points_per_degree: float | None = None
+
+
+class TraceAnalysis(BaseModel):
+    """O resultado da análise de um arquivo enviado, mais a procedência."""
+
+    target: str
+    result: dict = Field(
+        ..., description="The module's own result object, unchanged."
+    )
+    sample_name: str | None = None
+    sample_mass_mg: float | None = None
+    heating_rate_K_min: float | None = None
+    exothermic_direction: str | None = None
+    x_label: str | None = None
+    y_label: str | None = None
+    columns: list[TraceColumn] = Field(default_factory=list)
+    notes: list[str] = Field(default_factory=list)
+    refusals: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Parts of the analysis that could not be carried out, with the "
+            "reason. Empty when everything ran."
+        ),
+    )
 
 
 class ErrorResponse(BaseModel):

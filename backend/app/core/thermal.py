@@ -189,6 +189,27 @@ _TG_SPAN_C = 12.0
 _PEAK_FLOOR = 0.03
 
 
+#: How much larger than the trace's own background variation a downward
+#: excursion must be to count as cold crystallisation. The bound suppresses Tg
+#: candidates at or above the peak, so a false positive is costly: it would
+#: hide a real glass transition. The two events differ by more than an order of
+#: magnitude on the traces that motivated the test (a 0.7 W/g crystallisation
+#: peak against a 0.02 W/g glass-transition step), so a floor of 8 is
+#: comfortably clear of both and still keeps instrument noise from qualifying.
+_MIN_COLD_CRYST_SIGNIFICANCE = 8.0
+
+#: Cold crystallisation cannot occur within this many degrees of the start of
+#: the scan: the sample must first be heated through its glass transition. A
+#: "peak" that close to the start is the cell-settling transient.
+_COLD_CRYST_MIN_MARGIN_C = 10.0
+
+#: Widest a cold-crystallisation peak may be, in degrees, measured at half its
+#: height. It is a transition, so it is narrow; a melting ramp is not. Real
+#: events in the PLLA dataset measured 3.5-4.3 C against 39 C for the melting
+#: ramp that this test exists to exclude, so the threshold sits in a wide gap.
+_MAX_COLD_CRYST_WIDTH_C = 15.0
+
+
 #: Confidence levels attached to a reported value. The point of the ladder is
 #: that the *nature* of the claim is visible, not just its number, so a reader
 #: can tell "this is a property of the file" from "this is my guess".
@@ -593,7 +614,10 @@ def _step_at(T: np.ndarray, y: np.ndarray, i: int, win: int) -> float:
 
 
 def _derivative_peak(
-    T: np.ndarray, y: np.ndarray, exclude: tuple[float, float] | None = None
+    T: np.ndarray,
+    y: np.ndarray,
+    exclude: tuple[float, float] | None = None,
+    below: float | None = None,
 ) -> int | None:
     """Index of the fastest change of slope in the trace: the classical Tg.
 
@@ -664,6 +688,14 @@ def _derivative_peak(
         # returned 257 C -- the far shoulder of the melting peak.
         if exclude is not None and exclude[0] <= float(T[i]) <= exclude[1]:
             continue
+        # The classical Tg construction is a candidate like any other, so it
+        # obeys the same physical ordering: above the cold-crystallisation peak
+        # the amorphous phase is gone and there is no glass transition left to
+        # find. Filtering only the window-mean search would leave this path --
+        # which is the one that wins on a trace with a strong cold-
+        # crystallisation event -- free to return the impossible answer.
+        if below is not None and float(T[i]) >= below:
+            continue
         # Width at half of *this candidate's* height, not of the global peak.
         half = window[k] * 0.5
         left = i
@@ -679,6 +711,125 @@ def _derivative_peak(
         if candidate_ok is not None and _is_step_not_peak(T, y, candidate_ok):
             return candidate_ok
     return None
+
+
+def _find_cold_crystallisation(
+    T: np.ndarray, y: np.ndarray, tm_idx: int | None
+) -> float | None:
+    """Temperature of the cold-crystallisation peak, if the trace shows one.
+
+    On heating, a quenched or amorphous sample passes through the glass
+    transition, may then crystallise (exothermic, so a *downward* excursion in
+    the endothermic-up convention) and only then melts. D. Dean, "Differential
+    Scanning Calorimetry" (Univ. of Alabama at Birmingham), slide 29, gives
+    this sequence as the standard set of events in a DSC trace; slide 28
+    defines cold crystallisation as the exothermic transition on heating from a
+    solid amorphous state to a solid crystalline one.
+
+    Returning the *temperature* rather than the index lets the caller use it as
+    an upper bound: a glass transition must lie below it, so everything at or
+    above it is not a Tg candidate.
+
+    The peak is looked for only between the start of the scan and the melting
+    peak, and only where it is a real excursion rather than noise: the
+    downward step must be a meaningful fraction of the trace's own background
+    variation. A trace with no cold crystallisation returns ``None``, which
+    leaves the caller's behaviour unchanged -- this constraint can only remove
+    candidates, never invent one.
+
+    Note the sign convention is load-bearing. A DSC exported "exothermic up"
+    shows cold crystallisation as an upward excursion and melting as downward;
+    ``_clean_curve`` normalises to endothermic-up before this runs, so the
+    downward test below is correct for both.
+    """
+    n = T.size
+    if n < 20:
+        return None
+
+    lo = max(0, int(0.05 * n))
+    hi = n - int(0.05 * n)
+    if tm_idx is not None:
+        # Cold crystallisation precedes melting, so nothing at or beyond the
+        # melting peak can be it.
+        hi = min(hi, tm_idx)
+    if hi <= lo + 1:
+        return None
+
+    seg_T = T[lo:hi]
+    seg_y = y[lo:hi]
+
+    # Detrend before looking for the excursion. A cold-crystallisation peak sits
+    # on a sloping heat-capacity background, and on a trace whose baseline
+    # merely slopes downward the deepest point is then simply the lowest end --
+    # not an event. Without this the detector fired on a clean synthetic trace
+    # whose only feature is a glass-transition step (the baseline runs from
+    # -0.133 to +0.09 W/g across the scan), and the resulting bound suppressed
+    # the real Tg: 0 of 12 detections. Fit and remove a straight line so what
+    # remains is the shape, not the slope.
+    if seg_y.size > 2:
+        coeffs = np.polyfit(seg_T, seg_y, 1)
+        seg_y = seg_y - np.polyval(coeffs, seg_T)
+
+    # A downward excursion: negate so a peak finder can be used directly.
+    depth = -seg_y
+    peak = float(np.max(depth))
+    if peak <= 0:
+        return None
+
+    # Significance against the trace's own background. The glass transition is
+    # a step of a few hundredths of a W/g; a genuine cold-crystallisation peak
+    # on the traces that caused this problem was 0.7 W/g, more than an order of
+    # magnitude larger. The floor keeps instrument noise from being read as an
+    # event, because a spurious bound here would silently suppress a real Tg.
+    background = float(np.percentile(np.abs(np.diff(seg_y)), 90)) if seg_y.size > 2 else 0.0
+    if background > 0 and peak / background < _MIN_COLD_CRYST_SIGNIFICANCE:
+        return None
+
+    i = int(np.argmax(depth))
+    t_peak = float(seg_T[i])
+
+    # The event must be a localised excursion, not one wall of the melting ramp
+    # or one end of a monotone drift. Requiring the signal to come back up on
+    # BOTH sides is what distinguishes a genuine exotherm from a step's
+    # shoulder. Testing only one side was not enough: on the clean synthetic
+    # trace (a Tg step at 85 C and a wide melting ramp at 170 C) the descending
+    # wall of the melting ramp satisfied it and a bound at 161 C was returned,
+    # which then suppressed the real Tg.
+    pad = max(3, min(50, len(seg_y) // 4))
+    if not (pad < i < len(seg_y) - pad):
+        return None
+    before = float(np.mean(seg_y[i - pad : i]))
+    after = float(np.mean(seg_y[i + 1 : i + 1 + pad]))
+    here = float(seg_y[i])
+    if not (before > here and after > here):
+        return None
+
+    # The excursion must also be *narrow*. Cold crystallisation is a transition:
+    # a peak a few degrees wide, not a ramp. The width at half maximum separates
+    # it from the other broad features of a scan that can look like a minimum,
+    # and the gap is wide rather than marginal. Measured:
+    #     real cold crystallisation (PLLA 10K/25K/50K):  3.5, 4.3, 4.1 C
+    #     the melting ramp of the clean synthetic trace: 39.2 C
+    # Without this test that ramp was accepted and produced a bound at 161 C,
+    # which suppressed the real glass transition at 85 C on a trace that has no
+    # cold crystallisation at all.
+    half = peak / 2.0
+    a = i
+    while a > 0 and depth[a] > half:
+        a -= 1
+    b = i
+    while b < depth.size - 1 and depth[b] > half:
+        b += 1
+    width = float(seg_T[b] - seg_T[a])
+    if width > _MAX_COLD_CRYST_WIDTH_C:
+        return None
+
+    # Guard the physically impossible: cold crystallisation sits between the
+    # glass transition and melting. A "peak" within a few degrees of the start
+    # of the scan is the cell-settling transient, which is not an event.
+    if t_peak - float(T[0]) < _COLD_CRYST_MIN_MARGIN_C:
+        return None
+    return t_peak
 
 
 def _is_step_not_peak(T: np.ndarray, y: np.ndarray, i: int) -> bool:
@@ -710,7 +861,10 @@ def _is_step_not_peak(T: np.ndarray, y: np.ndarray, i: int) -> bool:
     return abs(end - start) / full_range >= _MIN_STEP_PERSISTENCE
 
 def _find_step_temperature(
-    T: np.ndarray, y: np.ndarray, exclude: tuple[float, float] | None = None
+    T: np.ndarray,
+    y: np.ndarray,
+    exclude: tuple[float, float] | None = None,
+    below: float | None = None,
 ) -> int | None:
     """
     Index of the step-like transition in ``y`` (a change of baseline level),
@@ -779,6 +933,12 @@ def _find_step_temperature(
             continue
         t_i = float(T[i])
         if exclude is not None and exclude[0] <= t_i <= exclude[1]:
+            continue
+        # A glass transition cannot lie at or above the cold-crystallisation
+        # peak: by then the amorphous phase that produces the step has
+        # crystallised. See the call site for the measurement that motivates
+        # this.
+        if below is not None and t_i >= below:
             continue
         before = float(np.mean(y[i - win : i]))
         after = float(np.mean(y[i : i + win]))
@@ -869,7 +1029,7 @@ def _find_step_temperature(
     # symmetry gate is not applied to it, because that gate is precisely what
     # is wrong on a drifting baseline; the significance floor still is, so a
     # flat trace with no transition cannot produce a fabricated Tg.
-    deriv_i = _derivative_peak(T, y, exclude)
+    deriv_i = _derivative_peak(T, y, exclude, below)
     if deriv_i is not None and deriv_i != best:
         d_step = _step_at(T, y, deriv_i, win)
         b_step = _step_at(T, y, best, win)
@@ -1684,10 +1844,36 @@ def analyse_dsc(
     # detector returned 257.0 -- the far shoulder of the melting peak, and a
     # Tg 180 C too high. The margin is a fixed few degrees because the flank
     # width does not scale with the peak.
+    #
+    # The exclusion must also cover *cold crystallisation*, for a reason that is
+    # physical rather than defensive. On heating, an amorphous or quenched
+    # sample passes through the glass transition, then may crystallise
+    # ("cold crystallisation", exothermic and therefore pointing DOWN in the
+    # endothermic-up convention), and only then melts. D. Dean, "Differential
+    # Scanning Calorimetry" (Univ. of Alabama at Birmingham), slide 29, names
+    # exactly this sequence; slide 28 defines the event.
+    #
+    # The ordering is a constraint the search can enforce: **a glass transition
+    # lies BELOW the cold-crystallisation peak**, because once the sample has
+    # crystallised the amorphous phase that produces the step is gone. A
+    # candidate at or above the cold-crystallisation peak cannot be a Tg.
+    #
+    # Without this, the cold-crystallisation peak wins outright: on the real
+    # PLLA trace DSC_PLLA_50K_2nd_heating (Zenodo 17288962) its descending limb
+    # reaches a gradient of -0.332 W/g/K at 90 C, twenty times the glass
+    # transition's +0.017 at 55 C, so the derivative-peak candidate is chosen
+    # and Tg is reported as 94.7 C -- *above* the cold-crystallisation minimum
+    # at 91.8 C, which is impossible. The true Tg, visible as a step between
+    # 52 and 58 C, was 55 C: the tool was wrong by 40 C. The error was the same
+    # on all three PLLA traces in that dataset (87.6, 94.2 and 94.7 C reported
+    # against cold-crystallisation peaks at 85.3, 90.8 and 91.8 C).
+    cold_cryst_peak = _find_cold_crystallisation(T, hf_s, tm_idx)
     exclude_range = melt_range
     if melt_range is not None:
         exclude_range = (melt_range[0] - _MELT_EXCLUDE_MARGIN_C, melt_range[1] + _MELT_EXCLUDE_MARGIN_C)
-    tg_idx = _find_step_temperature(T, hf_s, exclude=exclude_range)
+    tg_idx = _find_step_temperature(
+        T, hf_s, exclude=exclude_range, below=cold_cryst_peak
+    )
     if tg_idx is not None:
         t_g_step = float(T[tg_idx])
         # Onset and end by the tangent construction on the step.

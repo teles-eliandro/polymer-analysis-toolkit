@@ -527,6 +527,69 @@ lesson is narrower than "add more tests": a resolver needs tests for the inputs
 it should reject, and a passing suite says nothing about a class of input it
 never states.
 
+### 3.8 A glass transition reported above the temperature that destroys it
+
+The defects in §3.1–§3.3 were inputs the analysis accepted without checking.
+This one is a *constraint* the analysis did not know it had.
+
+A DSC scan of an amorphous or quenched polymer passes through a fixed sequence
+of events: the glass transition, then — if the sample is crystallisable —
+cold crystallisation (exothermic), and only then melting. D. Dean,
+*Differential Scanning Calorimetry* (University of Alabama at Birmingham),
+slide 29 gives this sequence, and slide 28 defines the middle event. The
+sequence is not a convention; it is a consequence of the free-energy landscape.
+And it imposes an ordering the analysis can enforce: **a glass transition lies
+below the cold-crystallisation peak**, because after crystallisation the
+amorphous phase that produces the step no longer exists.
+
+The tool violated this. On the three literature PLLA traces of Zenodo
+10.5281/zenodo.17288962 (Tg of PLLA is about 60–65 °C):
+
+| Trace | Tg reported | Cold-crystallisation peak | Physically possible? |
+|---|---|---|---|
+| `PLLA_10K` | 87.6 °C | 85.3 °C | no |
+| `PLLA_25K` | 94.2 °C | 90.8 °C | no |
+| `PLLA_50K` | 94.7 °C | 91.8 °C | no |
+
+In all three the reported glass transition sat **above** the exothermic
+minimum. The cause is measurable: on the `PLLA_50K` trace the descending limb
+of the cold-crystallisation peak reaches a gradient of **−0.332 W/g/K** at
+90 °C, twenty times the +0.017 W/g/K of the actual glass-transition step at
+55 °C. Both the window-mean search and the classical `|dhf/dT|` construction
+rank by magnitude, so the crystallisation event won every time, and the real
+step was never a contender.
+
+The fix adds one rule: candidates at or above the cold-crystallisation peak are
+not glass transitions. The cold-crystallisation temperature is *found* rather
+than assumed — a narrow, significant downward excursion before the melting
+peak — and when a trace has no such event the rule is inert, so it can only
+remove an impossible answer and never invent one. Three guards keep the finder
+from firing on traces that have no cold crystallisation, and each was added
+after it fired wrongly: the excursion must be detrended (a merely sloping
+baseline made the lowest point look like an event), must return on **both**
+sides (the descending wall of a melting ramp satisfied a one-sided test), and
+must be **narrow** at half height (real events measured 3.5–4.3 °C, a melting
+ramp 39.2 °C).
+
+Two things this did and did not do, stated separately because the difference
+matters:
+
+* **It removed the impossibility.** No PLLA trace now reports a Tg above its
+  cold-crystallisation peak, and the 332-test suite is unchanged — the rule
+  broke nothing.
+* **It did not produce the right number.** Tg is still ~87 °C, not 60–65 °C.
+  The real step at 55 °C is rejected by the symmetry gate
+  (`_MIN_TG_SYMMETRY`), which exists to reject melting flanks and is what stops
+  a melting peak being reported as a Tg. Its measuring window reaches down into
+  the cold-crystallisation descent, so the post-transition slope is 12 times
+  the pre-transition one and the gate refuses a real transition. Fixing that
+  means changing the gate, which is the same class of change that broke
+  detection on Tg-only traces in two earlier attempts (see item 4 above).
+
+So the honest summary is that this defect is **half fixed**: the analysis no
+longer states something physically impossible, and it still does not state the
+right value. Those are different claims, and only the first is supported.
+
 
 ---
 
@@ -580,6 +643,17 @@ the claim to be revisited instead of decaying unnoticed.
    no trace now reports the ramp end as a melting temperature — but the
    overall hit rate on semicrystalline polymers is unchanged, and four traces
    now report a melting temperature that is not there.
+
+   A *second* defect was found later and fixed (§3.8), and it is worth stating
+   what it did and did not change. The glass-transition search could return a
+   temperature **above the cold-crystallisation peak**, which is impossible:
+   once the sample has crystallised, the amorphous phase that produces the
+   step no longer exists. Two of the three literature PLLA traces had this.
+   The ordering constraint removed the impossibility, and the three traces now
+   report a physically possible Tg — but the value is still about 87 °C against
+   a literature 60–65 °C, because the real step is rejected by the symmetry
+   gate that exists to reject melting flanks. So this item **remains open**: the
+   constraint made the answer possible, not correct.
 5. **Melting enthalpy under inverted polarity.** With the sign corrected, Tm is
    right and `ΔHm` is wrong by two orders of magnitude — PLA reports 0.229 J/g
    against a plausible 20–40 J/g, and a fully crystalline reference of 93 J/g.
@@ -657,7 +731,7 @@ trace and a negative mass are all accepted without complaint by arithmetic that
 is otherwise correct; and verify against data the implementation did not
 generate.
 
-The verification described here found six defects that no amount of internally
+The verification described here found seven defects that no amount of internally
 consistent testing would have surfaced, established that the three
 input-checking failures share a single cause, and leaves seven questions open.
 Both outcomes are the point of doing it.
@@ -700,6 +774,11 @@ is what keeps a missing reference from being reported as a disagreement.
    of Fusion and Crystallization of Polymers by Differential Scanning
    Calorimetry*.
 10. ASTM E2550, *Standard Test Method for Thermal Stability by Thermogravimetry*.
+11. D. Dean, *Differential Scanning Calorimetry*, University of Alabama at
+    Birmingham. Slides 28 (cold crystallisation) and 29 (the ordered sequence
+    of events in a DSC trace) are the basis of §3.8. Slide 11 distinguishes the
+    first-order melting transition from the second-order glass transition, and
+    slide 55 gives the ASTM D3418 midpoint construction this tool implements.
 
 ## Licence
 
