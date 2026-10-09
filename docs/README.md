@@ -795,6 +795,136 @@ when the caller does not. Neither existed before, which is why the two lists
 were free to diverge. Frontend suite at 89 passing.
 
 
+### 3.13 The spectrum declared its axes, and the reader looked for column headers
+
+The same user then exported an FTIR spectrum from a JASCO FT/IR-4600. The file
+was refused with *"I could not find the wavenumber column"* — although the file
+states its axes explicitly:
+
+```
+TITLE	ldpe sbc 818 0
+DATA TYPE	INFRARED SPECTRUM
+XUNITS	1/CM
+YUNITS	ABSORBANCE
+NPOINTS	    3736
+XYDATA
+399,1927	0,0104689
+400,1569	0,022843
+```
+
+The reader was built for the NETZSCH convention, where metadata arrives as
+`#KEY:value` and the columns are named in a `##` header row. A JASCO spectrum
+uses a third convention: `KEY<TAB>value` with no `#` at all, and the axes
+described in their own lines rather than in a column header. Nothing matched, so
+no metadata was found — and, worse, `TITLE<TAB>ldpe sbc 818 0` was taken for the
+column header row. The result was one column named *TITLE*, carrying no values,
+no axis with a role, and a refusal that blamed a missing column on a file that
+declares it on line four.
+
+This is the same defect as §3.12 seen from the other side. There, one format was
+refused by a check that did not know what the reader knew; here, one format was
+refused by a reader that only knew one way for an instrument to describe itself.
+Both come from a single hard-coded expectation standing in for a contract. The
+fix is a third door into the same `TraceFile`, so role resolution, unit
+conversion and consistency checking are shared rather than reimplemented:
+
+| Door | Convention | Example |
+|---|---|---|
+| text | `#KEY:value`, `##col header` | NETZSCH DSC |
+| `.tri` | binary, channel names in `proceduresignals` | TA Instruments |
+| key/value | `KEY<TAB>value`, `XYDATA`, `XUNITS` | JASCO, PerkinElmer |
+
+The same door admits the PerkinElmer Spectrum CSV, whose header row is *only
+units* (`cm-1,%T`) and whose sample name sits in a preamble line,
+`Created as New Dataset,PE pellet 124kDa Alfa Aesar` — a line that a two-column
+reader would take for a data row and that would shift the whole spectrum by one
+point.
+
+**Verified against eight real spectra**, downloaded from the figshare set
+`24593022` already used in this repository. Reading them is not evidence of
+reading them *correctly*: the detected bands were checked against each polymer's
+known chemistry, since a mis-assigned axis puts peaks at physically absurd
+positions and no structural assertion would notice.
+
+| Sample | Bands found (cm⁻¹) | Expected |
+|---|---|---|
+| PE | 2915, 2848, 1470, 717 | CH₂ stretch / scissor / rock |
+| PP | 2951, 2918, 2869, 1376 | CH₃/CH₂ stretch, CH₃ umbrella |
+| PET | 1713, 1239, 1093, 722 | ester C=O, C–O, CH₂ rock |
+| Nylon-6 | 1635, 1541, 692 | amide I, amide II, amide IV |
+| PS | 695, 753, 1452, 1493 | aromatic CH out-of-plane |
+| PLA | 1748 | ester C=O |
+
+**A defect that only a real file exposed.** The PLA spectrum reports
+transmittance up to **100.22 %**. The literal conversion `A = 2 − log10(%T)`
+yields a *negative* absorbance of −0.00095, and the FTIR analysis rejects
+negative absorbance — the file was unanalysable because of 0.22 % of baseline
+drift. Transmittance above 100 % is physically impossible and is instrument
+drift, not signal. The ceiling is applied at 100 before conversion, and the
+count of clamped points is reported. An earlier attempt to fix this by removing
+the negative values would have hidden a real calibration problem; naming it
+keeps the information.
+
+### 3.14 A number that is always cited, and never measured
+
+Degree of crystallinity by DSC is `Xc = ΔHm / ΔHf100 × 100`, where `ΔHf100` is
+the melting enthalpy of the same polymer in a **100 % crystalline** state. That
+denominator cannot be measured: no real sample is fully crystalline, so the
+value is always extrapolated in the literature. And it is *specific to the
+polymer and to its crystal form* — about 293 J/g for polyethylene, 207 J/g for
+isotactic polypropylene, 93 J/g for PLA. Passing the polyethylene value for a
+PLA sample returns a crystallinity roughly three times too low, silently,
+because nothing about the resulting number looks wrong.
+
+The field used to be a free numeric input, which makes that error invisible and
+makes the number unverifiable. It now draws on an internal database
+(`backend/app/core/crystallinity_ref.py`, 19 polymers) in which **every value
+carries its citation**, and where the reported confidence distinguishes a
+primary source whose DOI was checked against the Crossref record from a named
+secondary compilation:
+
+| Polymer | ΔHf100 (J/g) | Crystal form | Source |
+|---|---|---|---|
+| PE | 293 | orthorhombic | Wunderlich & Cormier 1967, `10.1002/pol.1967.160050514` |
+| PP (α) | 207 | monoclinic | Bu, Cheng & Wunderlich 1988, `10.1002/marc.1988.030090205` |
+| PET | 140 | triclinic | Starkweather, Zoller & Jones 1983, `10.1002/pol.1983.180210211` |
+| PEEK | 130 | orthorhombic | Blundell & Osborn 1983, `10.1016/0032-3861(83)90144-1` |
+| PHB | 146 | orthorhombic | Barham *et al.* 1984, `10.1007/bf01026954` |
+| PLA | 93 | α (10/3 helix) | Fischer, Sterzel & Wegner 1973, `10.1007/bf01498927` |
+
+Where the literature disagrees, **both values are kept with their own sources**
+rather than averaged: PET at 140 J/g (1983) against 125 J/g (1969), PA66 at
+255 J/g against 280 J/g in some compilations. An average of two disagreeing
+numbers belongs to neither source.
+
+Three consequences of getting the reference wrong are handled explicitly
+rather than by a default:
+
+1. **The field fills itself** from the sample name in the instrument file, and
+   the citation travels with the result — the run above on a file named
+   `LDPE-SBC-818` reports the source, not just the number.
+   `GET /thermal/crystallinity-references` feeds a dropdown for callers that
+   prefer to choose.
+2. **PEKK is not polyethylene and PA46 is not nylon-6.** Resolution refuses
+   rather than guessing, because a reference for the wrong polymer is worse
+   than no reference: it produces a confident, cited, wrong crystallinity.
+   Three such traps have a test each.
+3. **Atactic PS has no value**, because it does not crystallise. The answer is
+   "not applicable", not a number — and specifically not the 207 J/g of the
+   *isotactic* form.
+
+**A crystallinity above 100 % is impossible**, and this is the case where the
+existing design was better than the first fix attempted here. Suppressing the
+value would hide the error; a further check confirms the value is *reported*
+(124 %, say) with a machine-readable `crystallinity_refusal` alongside it, since
+`124.5` and `45.0` otherwise arrive looking identical. The causes are few and
+nameable: the reference belongs to another polymer, the sample has more than one
+crystalline phase, or the integration baseline is too high.
+
+Test coverage: 44 new tests across three files, on the real instrument files
+committed as fixtures. **413 passing**, lint clean, build compiled.
+
+
 ---
 
 ## 4. What is not established
