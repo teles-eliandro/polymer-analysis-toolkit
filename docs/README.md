@@ -758,6 +758,42 @@ On the reporting file (LDPE, 168 points, 10 K/min) the trace now reads
 105–115 °C window for LDPE, with ΔHm = 111.2 J/g. The previous route fed the
 analysis the time axis.
 
+### 3.12 Two lists of accepted formats, and no reason for them to agree
+
+With the text export working, the same user tried the instrument's own binary
+container — a `.tri` from the TA Instruments calorimeter — and it was refused.
+
+The reader handled it: §3.10 had unified the two formats behind one dispatch,
+and the file read correctly through the API. The front end refused it before the
+request was made. The file picker advertised `.tri`, because the panel passed an
+`accept` attribute listing it; the check that actually ran drew on a different
+list, fixed inside the drop component and chosen by callback mode, which
+contained only text extensions.
+
+Two lists existed for one question, and nothing required them to agree. This is
+the same failure as §3.11 one layer further out — a component that reads its own
+configuration instead of being told it — and it produced the same shape of
+outcome: the user was told a format was supported and then told it was not, with
+no indication that the two answers came from different places.
+
+The list is now passed in by the caller that knows its reader, so the advertised
+set and the enforced set are the same value. Naming the vendor containers there
+also changes where a refusal comes from: the server knows what a `.ngb-sd7` is
+and can say it is not decoded yet, whereas an extension check can only ever
+answer "unsupported".
+
+A second limit was wrong in the same direction. The upload ceiling was 32 MB,
+chosen as a round number; a real `.tri` from the calibration set runs 25–34 MB,
+and **21 of the 116 files** fall between 32 and 64 MB, with the largest at 46 MB.
+A fifth of the set would have been refused by a limit that was never checked
+against the data it had to pass. The ceiling is now 64 MB, and the number is
+stated in the error the user sees.
+
+Test coverage: two frontend tests, one asserting that a `.tri` reaches the
+server callback when the caller declares it, one asserting that it is refused
+when the caller does not. Neither existed before, which is why the two lists
+were free to diverge. Frontend suite at 89 passing.
+
 
 ---
 
