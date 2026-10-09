@@ -4,16 +4,28 @@ import React, { useState } from 'react';
 import { saveAs } from 'file-saver';
 import { useI18n, formatNumber } from '../i18n/I18nContext';
 import { buildZip, dataUrlToBytes, toCsv } from '../services/zip';
+import { ClaimEvidence, ConfidenceBadge } from './Confidence';
 
 /** A single labelled result value, with an optional explanatory note. */
-export function Stat({ label, value, unit, note, raw, footing, footingWarning }) {
+export function Stat({
+  label,
+  value,
+  unit,
+  note,
+  raw,
+  footing,
+  footingWarning,
+  claim,
+}) {
   const display =
     raw !== undefined && raw !== null && typeof raw !== 'number'
       ? raw
       : formatNumber(value);
   return (
     <div className="stat">
-      <div className="stat-label">{label}</div>
+      <div className="stat-label">
+        {label} <ConfidenceBadge claim={claim} />
+      </div>
       <div className="stat-value">
         {display}
         {unit ? <span className="stat-unit">{unit}</span> : null}
@@ -25,6 +37,7 @@ export function Stat({ label, value, unit, note, raw, footing, footingWarning })
         <div className={footingWarning ? 'stat-footing warn' : 'stat-footing'}>{footing}</div>
       ) : null}
       {note ? <div className="stat-note">{note}</div> : null}
+      <ClaimEvidence claim={claim} />
     </div>
   );
 }

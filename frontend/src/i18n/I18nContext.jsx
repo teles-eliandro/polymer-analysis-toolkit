@@ -186,6 +186,16 @@ const MESSAGES = {
     'thermal.residue': 'Residue',
     'thermal.steps': 'Decomposition steps',
     'thermal.Tg': 'Glass transition',
+    'confidence.read': 'read',
+    'confidence.read.hint':
+      'A property of the input file, or a deterministic transform of it. Nothing here is an inference.',
+    'confidence.formula': 'formula',
+    'confidence.formula.hint':
+      'A published formula applied to a declared input. Cite the formula and its bounds and you reproduce the number.',
+    'confidence.suggested': 'suggested',
+    'confidence.suggested.hint':
+      'An inference from the shape of the trace. It can be wrong: on real instrument data the transition identification is not reliable enough to call a measurement.',
+    'confidence.why': 'Why this value?',
     'thermal.reliable': 'stable on resampling',
     'thermal.notReliable': 'UNSTABLE - do not quote without repeats',
     'thermal.TgNote':
@@ -537,6 +547,16 @@ const MESSAGES = {
     'thermal.residue': 'Resíduo',
     'thermal.steps': 'Etapas de decomposição',
     'thermal.Tg': 'Transição vítrea',
+    'confidence.read': 'lido',
+    'confidence.read.hint':
+      'Propriedade do arquivo de entrada, ou transformação determinística dele. Nada aqui é inferência.',
+    'confidence.formula': 'fórmula',
+    'confidence.formula.hint':
+      'Fórmula publicada aplicada a uma entrada declarada. Cite a fórmula e seus limites e o número se reproduz.',
+    'confidence.suggested': 'sugerido',
+    'confidence.suggested.hint':
+      'Inferência a partir da forma do traço. Pode estar errada: em dados reais de instrumento a identificação de transição não é confiável o bastante para ser chamada de medição.',
+    'confidence.why': 'Por que este valor?',
     'thermal.reliable': 'estável ao reamostrar',
     'thermal.notReliable': 'INSTÁVEL - não cite sem repetições',
     'thermal.TgNote':
@@ -889,6 +909,16 @@ const MESSAGES = {
     'thermal.residue': 'Residuo',
     'thermal.steps': 'Etapas de descomposición',
     'thermal.Tg': 'Transición vítrea',
+    'confidence.read': 'leído',
+    'confidence.read.hint':
+      'Propiedad del archivo de entrada, o una transformación determinista del mismo. Nada aquí es una inferencia.',
+    'confidence.formula': 'fórmula',
+    'confidence.formula.hint':
+      'Fórmula publicada aplicada a una entrada declarada. Cite la fórmula y sus límites y el número se reproduce.',
+    'confidence.suggested': 'sugerido',
+    'confidence.suggested.hint':
+      'Inferencia a partir de la forma de la traza. Puede estar equivocada: en datos reales de instrumento la identificación de transiciones no es lo bastante fiable para llamarla medición.',
+    'confidence.why': '¿Por qué este valor?',
     'thermal.reliable': 'estable al remuestrear',
     'thermal.notReliable': 'INESTABLE - no citar sin repeticiones',
     'thermal.TgNote':

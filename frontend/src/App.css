@@ -1100,3 +1100,86 @@ footer a {
   color: #b45309;
   font-weight: 600;
 }
+
+/* The confidence rung next to a value. The rungs are not degrees of the same
+   thing, so they are colour-separated rather than shaded by intensity: a
+   "suggested" value is a different kind of claim from a "read" one, not a
+   weaker version of it. Colour is never the only signal -- the badge also
+   carries the word -- because a reader who cannot see the colour must still
+   be able to tell an inference from a reading. */
+.rung {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: var(--radius-sm, 5px);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  vertical-align: middle;
+  white-space: nowrap;
+  cursor: help;
+}
+
+.rung-read {
+  background: var(--accent-soft, #e8f1fc);
+  color: var(--accent-strong, #0f4f9e);
+}
+
+.rung-formula {
+  background: #eef0f4;
+  color: var(--text-muted, #5b6270);
+}
+
+/* The rung that matters. Warn-coloured on purpose: a suggested transition is
+   the number a reader is most likely to mistake for a measurement. */
+.rung-suggested {
+  background: var(--warn-soft, #fdf3e0);
+  color: var(--warn, #8a5a00);
+}
+
+/* Why a value is what it is: the evidence behind a suggestion, collapsed so
+   the grid stays scannable, expandable so the inference can be judged rather
+   than trusted. */
+.claim {
+  margin-top: 6px;
+}
+
+.claim-toggle {
+  padding: 2px 0;
+  border: none;
+  background: none;
+  color: var(--accent, #1668c9);
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.claim-toggle:hover {
+  text-decoration: underline;
+}
+
+.claim-caret {
+  display: inline-block;
+  width: 1em;
+  color: var(--text-faint, #878e9c);
+}
+
+.claim-list {
+  margin: 4px 0 0;
+  padding-left: 1.2em;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--text-muted, #5b6270);
+}
+
+.claim-list li {
+  margin-bottom: 3px;
+}
+
+/* The caveat, not another observation: keep it distinct from the evidence. */
+.claim-note {
+  color: var(--warn, #8a5a00);
+  font-style: italic;
+}

@@ -425,6 +425,7 @@ function TgaResults({ data, t }) {
 
 function DscResults({ data, t }) {
   const plot = useRef(null);
+  const claims = data.claims || {};
   return (
     <section className="results">
       <h3>{t('common.results')}</h3>
@@ -442,16 +443,28 @@ function DscResults({ data, t }) {
               : null
           }
           footingWarning={data.Tg_reliable === false}
+          claim={claims.Tg}
         />
-        <Stat label={t('thermal.Tm')} value={data.Tm} unit="°C" />
-        <Stat label={t('thermal.deltaHm')} value={data.delta_Hm} unit="J/g" />
-        <Stat label={t('thermal.deltaCp')} value={data.delta_cp} unit="J/(g·K)" />
+        <Stat label={t('thermal.Tm')} value={data.Tm} unit="°C" claim={claims.Tm} />
+        <Stat
+          label={t('thermal.deltaHm')}
+          value={data.delta_Hm}
+          unit="J/g"
+          claim={claims.delta_Hm}
+        />
+        <Stat
+          label={t('thermal.deltaCp')}
+          value={data.delta_cp}
+          unit="J/(g·K)"
+          claim={claims.delta_cp}
+        />
         {data.crystallinity_pct !== null && data.crystallinity_pct !== undefined ? (
           <Stat
             label={t('thermal.crystallinity')}
             value={data.crystallinity_pct}
             unit="%"
             note={t('thermal.crystallinityNote')}
+            claim={claims.crystallinity_pct}
           />
         ) : null}
       </StatGrid>

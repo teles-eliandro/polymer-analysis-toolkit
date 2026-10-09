@@ -168,6 +168,40 @@ class DSCResult(BaseModel):
     temperature: list[float]
     heat_flow: list[float]
     direction: str
+    claims: dict[str, "FieldClaim"] = Field(
+        default_factory=dict,
+        description=(
+            "What each reported number is worth, keyed by field name. Every "
+            "transition temperature is 'suggested' -- an inference from the "
+            "trace shape that can be wrong -- while quantities read from the "
+            "file are 'read' and published formulas over declared inputs are "
+            "'formula'. Absent fields were not reported at all. Clients should "
+            "present the confidence alongside the value rather than the bare "
+            "number."
+        ),
+    )
+
+
+class FieldClaim(BaseModel):
+    """A reported value with its confidence and the evidence behind it."""
+
+    value: float | None = None
+    confidence: str = Field(
+        "suggested",
+        description=(
+            "One of 'read' (a property of the input, or a deterministic "
+            "transform of it), 'formula' (a published formula over a declared "
+            "input; reproducible), or 'suggested' (an inference from the trace "
+            "shape; can be wrong)."
+        ),
+    )
+    evidence: list[str] = Field(
+        default_factory=list,
+        description="The measured observations that produced this value.",
+    )
+    note: str | None = Field(
+        None, description="The caveat a reader needs to act correctly on it."
+    )
 
 
 class DSCTraceInput(BaseModel):

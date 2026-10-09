@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException
 from app.api.v1.schemas import (
     DSCResult,
     DSCTraceInput,
+    FieldClaim,
     TGAResult,
     TGAStep,
     TGATraceInput,
@@ -109,4 +110,13 @@ async def dsc_endpoint(payload: DSCTraceInput) -> DSCResult:
         temperature=r.temperature,
         heat_flow=r.heat_flow,
         direction=r.direction,
+        claims={
+            k: FieldClaim(
+                value=v.value,
+                confidence=v.confidence,
+                evidence=list(v.evidence),
+                note=v.note,
+            )
+            for k, v in r.claims.items()
+        },
     )
