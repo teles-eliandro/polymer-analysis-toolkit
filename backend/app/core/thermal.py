@@ -189,6 +189,57 @@ _TG_SPAN_C = 12.0
 _PEAK_FLOOR = 0.03
 
 
+#: Confidence levels attached to a reported value. The point of the ladder is
+#: that the *nature* of the claim is visible, not just its number, so a reader
+#: can tell "this is a property of the file" from "this is my guess".
+#:
+#: ``READ``    -- a property of the input file or a deterministic transform of
+#:               it (time axis, sample mass, programmed method, the plotted
+#:               curve). Not an interpretation; there is nothing to disagree
+#:               with.
+#: ``FORMULA`` -- a published formula applied to a declared input (enthalpy by
+#:               integration, crystallinity from a reference enthalpy, Mw from
+#:               intrinsic viscosity). Reproducible: cite the formula and the
+#:               integration bounds and any competent analyst gets the same
+#:               number back.
+#: ``SUGGESTED`` -- an inference from the shape of the trace. This is the
+#:               transition identification, and on the figshare 24462004 set it
+#:               is wrong often enough that it must never be presented as a
+#:               measurement. Carries the evidence that produced it.
+READ = "read"
+FORMULA = "formula"
+SUGGESTED = "suggested"
+
+#: Ordering for the ladder, so callers can compare or sort by confidence.
+_CONFIDENCE_RANK = {READ: 0, FORMULA: 1, SUGGESTED: 2}
+
+
+@dataclass
+class FieldClaim:
+    """A reported value together with why the reader should believe it.
+
+    ``value`` is the number as reported (may be ``None`` when the analysis
+    declined to answer). ``confidence`` is one of ``READ``/``FORMULA``/
+    ``SUGGESTED``. ``evidence`` is the short list of measured facts that
+    produced the value -- for a suggested transition, the observations that
+    make it a candidate at all. ``note`` carries the caveat a reader needs to
+    act correctly on it.
+    """
+
+    value: float | None = None
+    confidence: str = SUGGESTED
+    evidence: list[str] = field(default_factory=list)
+    note: str | None = None
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "value": self.value,
+            "confidence": self.confidence,
+            "evidence": list(self.evidence),
+            "note": self.note,
+        }
+
+
 @dataclass
 class TGAResult:
     """Thermogravimetric results. Temperatures in degrees Celsius."""
@@ -277,6 +328,12 @@ class DSCResult:
     heat_flow: list[float] = field(default_factory=list)
     #: Warming steps applied and which one the results came from.
     direction: str = "heating"
+    #: Per-transition claims with their confidence and supporting evidence.
+    #: Keys are the field names above ("Tg", "Tm", "delta_Hm", ...). Anything
+    #: absent from this mapping was not reported at all. This is the honest
+    #: interface: the bare floats above are the numbers, these say what they
+    #: are worth. See ``FieldClaim``.
+    claims: dict[str, FieldClaim] = field(default_factory=dict)
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -294,6 +351,7 @@ class DSCResult:
             "temperature": self.temperature,
             "heat_flow": self.heat_flow,
             "direction": self.direction,
+            "claims": {k: v.as_dict() for k, v in self.claims.items()},
         }
 
 
@@ -1688,6 +1746,115 @@ def analyse_dsc(
         result.Tg_reliable = (
             result.Tg_uncertainty_C is not None
             and result.Tg_uncertainty_C <= _TG_RELIABLE_TOLERANCE_C
+        )
+
+    # ---- Attach the confidence ladder --------------------------------------
+    # Every number above is a bare float. These claims say what each one is
+    # worth, and carry the observations that produced it, so a reader can judge
+    # the inference instead of having to trust it. See ``FieldClaim``.
+    #
+    # The transition temperatures are SUGGESTED without exception. Measured
+    # against the published windows on the 116 figshare traces, the Tg lands
+    # correctly on roughly 30 % of them and the Tm on 106/116 -- and "106/116"
+    # flatters it, because a value can fall inside a generous window for the
+    # wrong reason. Nothing in this module can tell a glass transition from a
+    # melting flank with the reliability a measurement implies, so it does not
+    # claim to.
+    if result.Tg is not None:
+        ev = []
+        if result.Tg_onset is not None and result.Tg_end is not None:
+            ev.append(
+                f"ASTM D3418 midpoint of {result.Tg_onset:.1f} and "
+                f"{result.Tg_end:.1f} C"
+            )
+        else:
+            ev.append("step located on the heat-flow baseline")
+        if result.Tg_uncertainty_C is not None:
+            ev.append(
+                f"moves {result.Tg_uncertainty_C:.1f} K when the trace is resampled"
+            )
+        note = (
+            "A suggested glass transition, not a measurement. Confirm against "
+            "the expected Tg for this polymer before quoting it."
+        )
+        if result.Tg_reliable is False:
+            note = (
+                "A suggested glass transition that did NOT survive the "
+                "resampling test: it moves more than "
+                f"{_TG_RELIABLE_TOLERANCE_C:.0f} K with the sampling of this "
+                "trace. Do not quote it as a number; go back to the instrument."
+            )
+        result.claims["Tg"] = FieldClaim(
+            value=result.Tg,
+            confidence=SUGGESTED,
+            evidence=ev,
+            note=note,
+        )
+        if result.delta_cp is not None:
+            result.claims["delta_cp"] = FieldClaim(
+                value=result.delta_cp,
+                confidence=FORMULA,
+                evidence=[
+                    "step between the plateaux flanking the transition, "
+                    "divided by the heating rate"
+                ],
+                note=(
+                    "Derived from the suggested Tg. If the transition "
+                    "identification is wrong, this step is measuring something "
+                    "else."
+                ),
+            )
+
+    if result.Tm is not None:
+        ev = ["endothermic excursion that returns to the local baseline"]
+        if result.delta_Hm is not None:
+            ev.append(f"DeltaHm = {result.delta_Hm:.1f} J/g over the fitted baseline")
+        result.claims["Tm"] = FieldClaim(
+            value=result.Tm,
+            confidence=SUGGESTED,
+            evidence=ev,
+            note=(
+                "A suggested melting peak, not a measurement. The detector "
+                "cannot always separate a melting endotherm from a glass "
+                "transition: on this dataset it has reported a melting "
+                "temperature for amorphous polystyrene, which has none."
+            ),
+        )
+
+    if result.delta_Hm is not None:
+        result.claims["delta_Hm"] = FieldClaim(
+            value=result.delta_Hm,
+            confidence=FORMULA,
+            evidence=[
+                "integral of the excess over a baseline fitted on the flanks "
+                "of the transition (ASTM D3418)"
+            ],
+            note=(
+                "Reproducible given the integration bounds, but the bounds "
+                "come from a suggested peak."
+            ),
+        )
+
+    if result.crystallinity_pct is not None:
+        result.claims["crystallinity_pct"] = FieldClaim(
+            value=result.crystallinity_pct,
+            confidence=FORMULA,
+            evidence=[
+                "100 * DeltaHm / DeltaHm(100 % crystalline), with the "
+                "reference enthalpy supplied by the caller"
+            ],
+            note=(
+                "Inherits the uncertainty of the suggested DeltaHm, and of the "
+                "reference enthalpy chosen."
+            ),
+        )
+
+    if result.Tc is not None:
+        result.claims["Tc"] = FieldClaim(
+            value=result.Tc,
+            confidence=SUGGESTED,
+            evidence=["exothermic excursion on the cooling leg"],
+            note="A suggested crystallisation peak, not a measurement.",
         )
 
     return result
