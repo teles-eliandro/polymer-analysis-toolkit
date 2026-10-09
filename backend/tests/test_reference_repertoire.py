@@ -199,6 +199,142 @@ class TestTheRepertoireStaysHonest:
         for name in ("Kevlar", "unknown-sample", "sample-1", "xyz", ""):
             assert resolve(name) is None, f"{name} should not resolve"
 
+
+class TestPrefixMatchingDoesNotRenameTheMaterial:
+    """
+    The bug this class exists for: "PEKK" resolved to polyethylene.
+
+    The matcher used to accept any alias that prefixed the cleaned name, so
+    every polymer whose name starts with an existing short alias was silently
+    identified as that alias's polymer. PEKK, PEI, PES, PESU and PEN all
+    became PE; PPO and PPE became PP. Each of those is a high-temperature
+    polymer whose transitions are hundreds of degrees from the range it was
+    then compared against, and the comparison reported a confident verdict on
+    the wrong material.
+
+    The fix removed open-ended prefix matching entirely. The matcher now
+    accepts exactly three shapes: an exact alias, a trailing run index, and a
+    separator-delimited qualifier. These tests are the specification.
+    """
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "PEKK",   # polyetherketoneketone, not polyethylene
+            "PEI",    # polyetherimide, Tg ~217 C
+            "PES",    # polyethersulfone
+            "PESU",   # polyethersulfone, another grade
+            "PEN",    # polyethylene naphthalate, Tm ~265 C
+            "PPO",    # polyphenylene oxide, Tg ~210 C
+            "PPE",    # polyphenylene ether, same family
+            "PHBH",   # PHB copolymer
+            "PCTG",   # glycol-modified PET
+            "PETG",   # same family as PCTG
+        ],
+    )
+    def test_a_different_polymer_is_not_read_as_the_shorter_name(self, name):
+        found = resolve(name)
+        assert found is None, (
+            f"{name} resolved to {found.key}: an alias matched a fragment of "
+            "a longer name, which is a different polymer"
+        )
+
+    @pytest.mark.parametrize("name", ["PA46", "PA610", "PA1010", "PA1212"])
+    def test_an_unlisted_nylon_grade_is_not_read_as_nylon_6(self, name):
+        """
+        PA46 and PA6 are both letters followed by digits, so the shape of the
+        string cannot separate them. They are distinguished by the alias table:
+        the entries with a digit (PA6, PA66, PA12, PA11) match exactly, and
+        there is no bare "pa" alias to catch the rest. PA46 melts 60 C above
+        PA6, so reading one as the other is a real error, not a technicality.
+        """
+        found = resolve(name)
+        assert found is None, (
+            f"{name} resolved to {found.key}; an unlisted grade must not "
+            "inherit a listed one's range"
+        )
+
+    @pytest.mark.parametrize("name", ["pvc-c", "PVC-C", "PVC-C-X", "PVC-C-Y"])
+    def test_a_substituted_name_is_not_read_as_its_parent(self, name):
+        """
+        A short letter fragment after a separator continues the chemical name.
+        PVC-C is chlorinated PVC, about 20 C above PVC in Tg.
+        """
+        found = resolve(name)
+        assert found is None, (
+            f"{name} resolved to {found.key}; a one-letter suffix continues "
+            "the name rather than labelling it"
+        )
+
+    def test_there_is_no_bare_pa_alias(self):
+        """
+        The bare "pa" alias was the mechanism behind PA46 -> PA6: stripping
+        the digits from any unlisted nylon grade landed on it. Polyamide alone
+        does not identify a polymer -- PA6, PA66, PA11 and PA12 differ by
+        100 C in melting point -- so it must not be in the table.
+        """
+        assert "pa" not in ALIASES
+
+    def test_the_nylon_aliases_that_do_exist_are_specific(self):
+        for alias in ("pa6", "pa66", "pa12", "pa11"):
+            assert alias in ALIASES
+            found = resolve(alias)
+            assert found is not None and found.key == ALIASES[alias]
+
+
+class TestTheToleranceStillWorksOnRealNames:
+    """
+    The other half of the contract: tightening the matcher must not stop the
+    real instrument exports from resolving.
+
+    The first nine names are from the figshare 24462004 set; the rest are the
+    shapes the qualifier rules exist for.
+    """
+
+    @pytest.mark.parametrize(
+        "name,expected",
+        [
+            ("ABS2", "ABS"),
+            ("ABS3", "ABS"),
+            ("PE-NEW", "PE"),
+            ("PP3-CRYO", "PP"),
+            ("PS5", "PS"),
+            ("PVC1", "PVC"),
+            ("PLA1-AR", "PLA"),
+            ("PLLA", "PLA"),
+            ("Nylon6", "PA6"),
+            ("NYLON66", "PA66"),
+            # Trailing run indices.
+            ("GPPS-1", "PS"),
+            ("HIPS-2", "PS"),
+            ("PA66-2", "PA66"),
+            ("PS5.txt", "PS"),
+            ("PLA1-AR.tri", "PLA"),
+            # Separator-delimited qualifiers.
+            ("HDPE-Recycled", "HDPE"),
+            ("LDPE-Film", "LDPE"),
+            ("TPU-95", "PU"),
+            ("SAN-25", "SAN"),
+            ("PEEK-CF", "PEEK"),
+            ("PEEK-CF-30", "PEEK"),
+            ("PLA-GF-NC", "PLA"),
+            ("PE-recycled", "PE"),
+            ("ABS-natural", "ABS"),
+        ],
+    )
+    def test_the_real_name_resolves(self, name, expected):
+        polymer = resolve(name)
+        assert polymer is not None, f"{name} stopped resolving"
+        assert polymer.key == expected
+
+    def test_the_four_engineering_polymers_resolve(self):
+        """These were aliases with no entry behind them."""
+        for name, key in (("PEEK", "PEEK"), ("PPSU", "PPSU"), ("PTFE", "PTFE")):
+            found = resolve(name)
+            assert found is not None and found.key == key
+
+
+class TestTheRepertoireStaysHonestContinued:
     def test_none_is_not_an_error(self):
         """A pasted trace carries no sample name at all."""
         assert resolve(None) is None

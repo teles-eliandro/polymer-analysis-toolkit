@@ -107,7 +107,6 @@ ALIASES: dict[str, str] = {
     "pa66": "PA66",
     "nylon66": "PA66",
     "nylon-66": "PA66",
-    "pa": "PA6",
     "abs": "ABS",
     "san": "SAN",
     "pu": "PU",
@@ -918,35 +917,99 @@ REPERTOIRE: dict[str, Polymer] = {
 }
 
 
+def _strip_run_suffix(token: str) -> str | None:
+    """
+    Strip a trailing run index from a token, or return None if there is none.
+
+    "abs2" -> "abs", "ps5" -> "ps", "pla1" -> "pla". A trailing number is the
+    one suffix instrument exports add that is unambiguous, because a polymer
+    name never ends in a bare digit: the nylons that do carry one (PA6, PA66,
+    PA12, PA11, PA46, PA610, PA1010) are written with letters after the digit,
+    so they are matched exactly and never reach this function with a partial
+    name. That is what makes "ABS2" resolvable while "PA46" is not silently
+    read as PA6.
+
+    Rejecting everything else is the point. An open-ended prefix rule cannot
+    separate those two cases -- both are letters followed by digits -- and
+    every attempt to patch one together accepts a wrong polymer for some
+    name. A wrong identification produces a cited range for the wrong
+    material and a confident wrong verdict, which is worse than no answer.
+    """
+    stripped = token.rstrip("0123456789")
+    if stripped == token or not stripped:
+        return None  # no trailing index, or nothing left behind it
+    return stripped
+
+
 def resolve(name: str | None) -> Polymer | None:
     """Find the repertoire entry for a sample name, or None.
 
     Sample names come from instrument files and are written by whoever ran the
-    instrument, so the match is deliberately tolerant: the name is stripped of
-    trailing digits and separators, lower-cased, and looked up in the alias
-    table. Anything still ambiguous returns None rather than a best guess,
-    because guessing the polymer is how a comparison produces a confident wrong
-    answer. ``None`` and the empty string are not errors -- a pasted trace
-    carries no sample name at all.
+    instrument, so the match is tolerant in exactly three ways, each of which
+    is a shape an instrument actually produces:
+
+    1. An exact alias match, case-insensitive: "ABS", "nylon66".
+    2. A trailing run index: "ABS2", "PS5", "PLA1".
+    3. A separator-delimited qualifier: "PE-NEW", "PP3-CRYO", "PLA1-AR",
+       "HDPE-Recycled". The qualifier is stripped and the head re-matched
+       through rules 1 and 2.
+
+    Anything else returns None rather than a best guess, because guessing the
+    polymer is how a comparison produces a confident wrong answer. In
+    particular there is no open-ended prefix match: "PEKK" is not
+    polyethylene, and "PA46" is not nylon-6. ``None`` and the empty string are
+    not errors -- a pasted trace carries no sample name at all.
     """
     if not name:
         return None
     cleaned = name.strip().lower()
-    # Strip an extension, a trailing index, and a trailing qualifier.
-    for suffix in (".tri", ".txt", ".csv", ".dat"):
-        if cleaned.endswith(suffix):
-            cleaned = cleaned[: -len(suffix)]
+    for ext in (".tri", ".txt", ".csv", ".dat"):
+        if cleaned.endswith(ext):
+            cleaned = cleaned[: -len(ext)]
     cleaned = cleaned.strip("-_ ")
-    if cleaned in ALIASES:
-        return REPERTOIRE.get(ALIASES[cleaned])
-    # Try progressively shorter prefixes: "pla-gf-feb2021-nc" -> "pla".
-    parts = [p for p in cleaned.replace("-", " ").replace("_", " ").split() if p]
-    for part in parts:
-        if part in ALIASES:
-            return REPERTOIRE.get(ALIASES[part])
-    # Try every alias as a prefix of the whole name, longest alias first, so
-    # "nylon66" is preferred over "nylon".
-    for alias in sorted(ALIASES, key=len, reverse=True):
-        if cleaned.startswith(alias):
-            return REPERTOIRE.get(ALIASES[alias])
+    if not cleaned:
+        return None
+
+    # Rule 1 and 2 on the whole name: "ABS", "ABS2", "nylon66".
+    #
+    # The head-token match is guarded: "pvc-c" must not become PVC through its
+    # first token. A trailing one-character fragment after a separator
+    # continues the chemical name -- PVC-C is chlorinated PVC, whose Tg is
+    # about 20 °C above PVC's -- so the head is only accepted when the rest of
+    # the name does not extend it that way.
+    head_token = cleaned.replace("-", " ").replace("_", " ").split()[0]
+    continuation = cleaned[len(head_token) :].lstrip("-_ ")
+    # A *letter* fragment shorter than two characters continues the name
+    # ("pvc-c", "pvc-c-x"). A digit fragment is a run index ("gpps-1",
+    # "hips-2", "pa66-2") and does not.
+    short_letter_fragment = any(
+        len(f) < 2 and not f.isdigit()
+        for f in continuation.replace("_", "-").split("-")
+        if f
+    )
+    extends_the_name = bool(continuation) and short_letter_fragment
+    for token in ((cleaned,) if extends_the_name else (cleaned, head_token)):
+        if token in ALIASES:
+            return REPERTOIRE.get(ALIASES[token])
+        head = _strip_run_suffix(token)
+        if head and head in ALIASES:
+            return REPERTOIRE.get(ALIASES[head])
+
+    # Rule 3, the separator-delimited qualifier: "PE-NEW" -> "pe",
+    # "PP3-CRYO" -> "pp3" -> "pp", "PLA1-AR" -> "pla1" -> "pla",
+    # "GPPS-1" -> "gpps" -> "ps".
+    #
+    # The tail must be a label, not a continuation of the chemical name. A
+    # tail of one-character *letters* is how names are built rather than
+    # annotated -- "pvc-c-x" is PVC-C with a further substitution, not PVC
+    # labelled "c-x". Real labels here are whole words, codes or run numbers:
+    # "new", "cryo", "ar", "gf", "recycled", "1", "30".
+    if head_token != cleaned and not extends_the_name:
+        tail = cleaned[len(head_token) :].lstrip("-_ ")
+        fragments = [f for f in tail.replace("_", "-").split("-") if f]
+        if fragments and all(len(f) >= 2 or f.isdigit() for f in fragments):
+            head = _strip_run_suffix(head_token)
+            target = head if (head and head in ALIASES) else head_token
+            if target in ALIASES:
+                return REPERTOIRE.get(ALIASES[target])
     return None
