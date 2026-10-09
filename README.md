@@ -202,14 +202,21 @@ logs a warning to the console. Always set it in the hosting environment.
 ## ✅ Tests
 
 ```bash
-cd backend  && .venv/bin/python -m pytest     # 149 passed, 3 xfailed
-cd frontend && CI=true npx react-scripts test --watchAll=false   # 7 passed
+cd backend  && .venv/bin/python -m pytest     # 332 passed, 3 xfailed
+cd frontend && CI=true npx react-scripts test --watchAll=false   # 87 passed, 10 suites
 ```
 
 Backend tests cover the API contract (JSON and multipart paths), each module's
 maths against synthetic cases with known answers, and the published-data checks
 described above. Frontend tests mount the real shell in jsdom, switch through
 the modules, and confirm that a result renders.
+
+Two suites are worth naming because they guard against failures a passing suite
+otherwise hides. `test_reference_repertoire.py` asserts **48 real instrument
+names that must resolve and 31 wrong identifications that must be refused**, so
+adding an alias cannot silently shadow an existing one. `test_confidence_claims.py`
+asserts that every reported field carries its confidence rung, so a value cannot
+be added without stating what it is worth.
 
 ---
 

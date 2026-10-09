@@ -51,6 +51,18 @@ to say so per field, rather than to be trusted or distrusted as a whole.
 All reference values used here were downloaded by a script in the repository.
 None was transcribed by hand.
 
+A fifth round inverted the question. The four rounds above all found inputs that
+were not what the method assumed. The fifth found a valid input, correctly read,
+interpreted wrongly: the sample-name resolver matched any alias that *prefixed*
+a name, so a polyetherketoneketone sample (`PEKK`) resolved as **polyethylene**,
+and `PEI`, `PES`, `PESU`, `PEN` resolved the same way, while three unrelated
+nylons resolved as nylon-6. The tool then reported a number that was
+arithmetically correct for the wrong material. Unlike the earlier defects, this
+one returned a wrong *identity* rather than a wrong number — a coherent,
+defensible-looking statement about the wrong substance. It was found by typing
+a name into the running application; all 332 tests passed while it was present,
+because the resolver had no test asserting a name it should **refuse**.
+
 ---
 
 ## 1. Scope
@@ -91,7 +103,29 @@ The interface is trilingual (English, Portuguese, Spanish) and the backend
 exposes an OpenAPI schema; the frontend consumes response field names from
 that schema rather than assuming them.
 
-### 1.2 Molar-mass averages
+### 1.2 What a comparison may say
+
+A measured value is compared against the published range of the polymer the
+sample is named as. That comparison has **three** outcomes, not two:
+
+| Verdict | Meaning |
+|---|---|
+| `within` | The measured value lies inside the published range |
+| `outside` | It lies outside a range that is known for this polymer |
+| `not_comparable` | No comparison was made, with the reason stated |
+
+The third outcome is the one that matters. A two-state comparison forces a
+"outside range" verdict whenever the tool cannot compare, which reports a
+disagreement where there is only an absence of information. `not_comparable`
+carries a machine-readable reason, so the interface can say *why*: the polymer
+was not identified, no range is on file for the property, or the sample name
+does not correspond to any entry. The reason is translated, so a reader in
+another language sees the same explanation.
+
+The repertoire holds **37 polymers** with cited ranges, reached through 65
+aliases. An entry whose range cannot be cited does not belong in it.
+
+### 1.3 Molar-mass averages
 
 Weight fractions are assumed, since that is the convention in GPC/SEC raw data:
 
@@ -438,6 +472,62 @@ The absurd mode is gone; the overall hit rate is not fixed, and four traces
 report a melting temperature that is not present. This is recorded as a
 regression in the account, not hidden in the diff.
 
+### 3.7 An input read correctly and interpreted wrongly
+
+The defects above share a shape: the input was not what the method assumed, and
+the arithmetic returned a confident number anyway. This one is the inverse, and
+it is the more dangerous of the two families. The input was a valid sample name.
+The file was read and plotted correctly. The defect was in deciding **which
+polymer the name denoted**.
+
+The sample-name resolver accepted any alias that *prefixed* the name, on the
+reasonable-seeming principle that instrument files add qualifiers (`PLA1-AR`,
+`ABS2`, `PE-NEW`). The consequence was not a near miss. Because `pe` prefixes
+`pekk`, a polyetherketoneketone sample was resolved as **polyethylene**; `pei`
+(polyetherimide), `pes` and `pesu` (polysulfones) and `pen` (polyethylene
+naphthalate) resolved the same way. `ppo` and `ppe` became polypropylene;
+`pa46`, `pa610` and `pa1010` — three distinct nylons with melting points
+unrelated to nylon-6 — all became **PA6**.
+
+| Sample name | Resolved as | Is actually | Would have been reported |
+|---|---|---|---|
+| `PEKK` | PE | polyetherketoneketone | Tm compared against polyethylene's range |
+| `PEI` | PE | polyetherimide (Tg ≈ 217 °C) | outside range, confidently |
+| `PESU` | PE | polysulfone (Tg ≈ 190 °C) | outside range, confidently |
+| `PEN` | PE | polyethylene naphthalate (Tm ≈ 265 °C) | outside range, confidently |
+| `PPO` | PP | polyphenylene oxide (Tg ≈ 210 °C) | outside range, confidently |
+| `PA46` | PA6 | nylon-4,6 (Tm ≈ 295 °C) | outside range, confidently |
+
+The failure is worse than the earlier ones in one respect: those returned a
+wrong *number*, which a researcher can sanity-check against known values. This
+returned a wrong *identity*, and then a number that was arithmetically correct
+for that identity. A Tg of 210 °C reported as "outside the polyethylene range"
+is a coherent, defensible-looking statement about the wrong material.
+
+The defect was found by typing `PEKK` into the running application, not by any
+test. Every one of the 332 tests passed while it was present; the resolver had
+no test that asserted a name it should *refuse*.
+
+The fix removes open-ended prefix matching entirely, since the string shape
+alone cannot distinguish the cases: `ABS2` and `PA46` are both letters followed
+by digits. Names now resolve in exactly three shapes an instrument produces —
+an exact alias, a trailing run index, or a separator-delimited qualifier — and
+everything else resolves to nothing, producing `not_comparable` with the reason
+`polymer_unidentified`. Two rules separate the cases the shapes cannot:
+a digit fragment after a separator is a run index (`GPPS-1` resolves), while a
+**letter** fragment continues the name (`PVC-C` is refused, since PVC-C is
+chlorinated PVC, not a labelled PVC). The bare `pa` alias was removed because
+it named "polyamide" generally while being matched as nylon-6 — it was the
+mechanism that turned `PA46` into `PA6`.
+
+The test file now asserts **48 real instrument names that must resolve and 31
+wrong identifications that must be refused**, by name, so that adding an alias
+cannot silently reopen the shadowing it was added to prevent. The general
+lesson is narrower than "add more tests": a resolver needs tests for the inputs
+it should reject, and a passing suite says nothing about a class of input it
+never states.
+
+
 ---
 
 ## 4. What is not established
@@ -533,10 +623,10 @@ python scripts/fetch_reference_data.py        # downloads the sources above
 
 cd backend && python -m venv .venv
 .venv/bin/pip install -r requirements-dev.txt
-.venv/bin/python -m pytest                    # 202 passed, 3 xfailed
+.venv/bin/python -m pytest                    # 332 passed, 3 xfailed
 
 cd ../frontend && npm ci
-CI=true npx react-scripts test --watchAll=false   # 7 passed
+CI=true npx react-scripts test --watchAll=false   # 87 passed, 10 suites
 ```
 
 The three figshare datasets are large (the DSC set alone is 3.1 GB) and are
@@ -567,16 +657,29 @@ trace and a negative mass are all accepted without complaint by arithmetic that
 is otherwise correct; and verify against data the implementation did not
 generate.
 
-The verification described here found five defects that no amount of internally
+The verification described here found six defects that no amount of internally
 consistent testing would have surfaced, established that the three
-input-checking failures share a single cause, and leaves six questions open.
+input-checking failures share a single cause, and leaves seven questions open.
 Both outcomes are the point of doing it.
+
+The sixth defect is the one that argues most strongly for the practice. Five of
+the six were found by running data the implementation did not generate through
+the tool. The sixth was found by running the *interface* — typing a polymer name
+and reading what came back — after every automated gate was green. A test suite
+can only assert the inputs someone thought to write down, and the absence of a
+test for a name that must be refused is invisible in a passing suite.
 
 The clearest lesson is about the cost of the last three. They were found only
 because the analysis was made fourteen times faster first; at ninety minutes
 per sweep, the polarity defect would have been characterised by three attempts
 instead of the eight it took, and the third would have looked like the last
 possible one.
+
+A second lesson is about which comparison the tool makes. Comparing a measured
+value against a published range has three possible outcomes, and a two-state
+comparison forces a "disagrees with the literature" verdict whenever the honest
+answer is "no comparison was made". `not_comparable`, with its reason stated,
+is what keeps a missing reference from being reported as a disagreement.
 
 ---
 
