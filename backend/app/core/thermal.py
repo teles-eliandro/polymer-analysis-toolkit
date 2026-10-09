@@ -335,6 +335,12 @@ class DSCResult:
     #: Degree of crystallinity in percent, if a 100 % crystalline reference
     #: enthalpy was supplied.
     crystallinity_pct: float | None
+    #: Why a crystallinity was not reported even though a reference enthalpy
+    #: was supplied. Set when the computed value exceeded 100 %, which is
+    #: physically impossible and means the reference does not match the
+    #: sample. Reporting the impossible number would be worse than reporting
+    #: nothing, so the field above stays None and the reason lives here.
+    crystallinity_refusal: str | None = None
     #: How much the reported Tg moves when the trace is resampled, in K. This
     #: is the method's own sensitivity to the sampling of *this* trace -- not
     #: an accuracy claim against a certified reference, which would need one.
@@ -367,6 +373,7 @@ class DSCResult:
             "Tc": self.Tc,
             "delta_Hc": self.delta_Hc,
             "crystallinity_pct": self.crystallinity_pct,
+            "crystallinity_refusal": self.crystallinity_refusal,
             "Tg_uncertainty_C": self.Tg_uncertainty_C,
             "Tg_reliable": self.Tg_reliable,
             "temperature": self.temperature,
@@ -1828,7 +1835,33 @@ def analyse_dsc(
                     area = area / (heating_rate / 60.0)
                 result.delta_Hm = abs(area)
                 if ref_enthalpy_J_g and ref_enthalpy_J_g > 0:
-                    result.crystallinity_pct = 100.0 * result.delta_Hm / ref_enthalpy_J_g
+                    xc = 100.0 * result.delta_Hm / ref_enthalpy_J_g
+                    result.crystallinity_pct = xc
+                    if xc > 100.0:
+                        # Uma cristalinidade acima de 100 % é fisicamente
+                        # impossível, e o número **é reportado** assim mesmo:
+                        # suprimi-lo esconderia o erro, e um campo vazio diz
+                        # menos que um 124 % visível. O que falta é um sinal
+                        # legível por máquina dizendo que este valor não pode
+                        # estar certo, para que quem consome a API não o trate
+                        # como um resultado -- sem isso, 124,5 e 45,0 chegam
+                        # com a mesma aparência.
+                        #
+                        # As causas são poucas e conhecidas: a referência não é
+                        # a deste polímero, a amostra tem mais de uma fase
+                        # cristalina (blenda), ou a linha de base da integração
+                        # ficou alta e inflou a área.
+                        result.crystallinity_refusal = (
+                            f"A cristalinidade calculada ({xc:.1f} %) é "
+                            f"fisicamente impossível: o ΔHm medido "
+                            f"({result.delta_Hm:.1f} J/g) excede a entalpia de "
+                            f"referência de 100 % cristalino "
+                            f"({ref_enthalpy_J_g:g} J/g). O valor é reportado "
+                            "para inspeção, mas não pode ser usado como "
+                            "resultado. Verifique se a referência é a deste "
+                            "polímero, se a amostra tem uma só fase cristalina, "
+                            "e se a linha de base da integração está correta."
+                        )
             melt_range = (float(T[a]), float(T[b]))
 
     # ---- Glass transition ---------------------------------------------------

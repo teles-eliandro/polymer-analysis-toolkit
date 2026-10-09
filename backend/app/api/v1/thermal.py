@@ -20,6 +20,9 @@ from app.api.v1.schemas import (
     TracePreview,
 )
 from app.core.compare import compare_result
+from app.core.crystallinity_ref import lookup as lookup_enthalpy
+from app.core.crystallinity_ref import options as crystallinity_options
+from app.core.structure import analyse_ftir
 from app.core.thermal import analyse_dsc, analyse_tga
 from app.core.trace_io import TraceImportError, read_trace_file, resolve_trace
 
@@ -37,10 +40,13 @@ router = APIRouter(prefix="/thermal", tags=["Thermal Analysis"])
 #: não ao arquivo inteiro.
 _MIN_POINTS_PER_DEGREE = 4.0
 
-#: O que cada módulo pede como eixo x e como sinal.
+#: O que cada módulo pede como eixo x e como sinal. Um arquivo de FTIR chega
+#: por aqui como qualquer outro: o leitor resolve os eixos (número de onda e
+#: absorbância, ou %T já convertido) e o chamador pede a análise de FTIR.
 _TRACE_ROLES = {
     "tga": ("temperature", "mass"),
     "dsc": ("temperature", "heat_flow"),
+    "ftir": ("wavenumber", "absorbance"),
 }
 
 
@@ -246,23 +252,55 @@ async def analyse_trace_endpoint(
     refusals: list[str] = []
 
     if target_key == "dsc":
+        # A entalpia de referência pode ser informada pelo chamador ou
+        # resolvida do nome da amostra. Resolver aqui é o que permite rodar o
+        # arquivo direto do instrumento sem digitar um número -- e o valor
+        # resolvido traz a citação junto, para que a cristalinidade calculada
+        # seja rastreável até a fonte.
+        ref_source: str | None = None
+        ref_key: str | None = None
+        ref_value = ref_enthalpy_J_g
+        if ref_value is None:
+            entry = lookup_enthalpy(tf.sample_name)
+            if entry is not None and entry.primary is not None:
+                ref_value = entry.primary.value_J_g
+                ref_source = entry.primary.source
+                ref_key = entry.key
+                notes.append(
+                    f"Entalpia de referência de 100 % cristalino tomada do banco "
+                    f"interno para '{entry.display_name}' ({ref_key}): "
+                    f"{ref_value:g} J/g. Fonte: {ref_source}"
+                )
+            elif entry is not None and entry.primary is None:
+                refusals.append(
+                    f"A amostra foi reconhecida como {entry.display_name}, que é "
+                    f"amorfo e não tem entalpia de referência: a cristalinidade "
+                    f"não se aplica. {entry.note or ''}".strip()
+                )
+
         if resolved.heating_rate is None:
             refusals.append(
                 "O arquivo não declara a taxa de aquecimento, então a "
                 "cristalinidade não foi calculada. O ΔHm é reportado em "
                 "J/g apenas se a taxa for fornecida."
             )
-        elif ref_enthalpy_J_g is None:
+        elif ref_value is None:
             refusals.append(
-                "Nenhuma entalpia de referência foi fornecida, então a "
-                "cristalinidade não foi calculada (ΔHm é reportado)."
+                "Nenhuma entalpia de referência foi fornecida, e o nome da "
+                "amostra não foi reconhecido no banco interno "
+                "(GET /api/v1/thermal/crystallinity-references lista o que "
+                "existe). O ΔHm é reportado, mas sem cristalinidade."
             )
         r = analyse_dsc(
             resolved.x,
             resolved.y,
             heating_rate=resolved.heating_rate,
-            ref_enthalpy_J_g=ref_enthalpy_J_g,
+            ref_enthalpy_J_g=ref_value,
         )
+    elif target_key == "ftir":
+        # Análise de FTIR: o leitor já entregou número de onda e absorbância
+        # (convertendo %T quando o arquivo exportava transmitância).
+        r = analyse_ftir(resolved.x, resolved.y)
     else:
         r = analyse_tga(resolved.x, resolved.y)
 
@@ -436,3 +474,41 @@ async def dsc_endpoint(payload: DSCTraceInput) -> DSCResult:
         },
         comparisons=[PropertyComparison(**c.as_dict()) for c in comparisons],
     )
+
+
+@router.get(
+    "/crystallinity-references",
+    summary="List the 100 % crystalline reference enthalpies",
+    response_description=(
+        "One entry per polymer: the reference value in J/g, the crystal form "
+        "it applies to, the citation, and how confident that citation is. "
+        "Values the literature reports differently appear as 'alternatives'."
+    ),
+)
+async def crystallinity_references() -> dict[str, object]:
+    """
+    The internal database that fills the reference-enthalpy field.
+
+    Crystallinity by DSC is ``Xc = ΔHm / ΔHf100 × 100``, and ``ΔHf100`` is not
+    measurable -- no real sample is 100 % crystalline, so the value always
+    comes from the literature. It is also **specific to the polymer and to its
+    crystal form**: the value for polyethylene (~293 J/g) used on a PLA sample
+    gives a crystallinity about three times too low, silently, because nothing
+    about the resulting number looks wrong.
+
+    Every entry therefore carries its citation, and the ``confidence`` field
+    says whether the DOI was checked or the value comes from a named
+    compilation. Where the literature disagrees, both values are listed rather
+    than averaged.
+
+    This list is what a form should use to offer the value as a choice instead
+    of a free numeric field. ``/thermal/from-file`` uses the same database to
+    fill the value automatically from the sample name in the instrument file.
+    """
+    return {
+        "note": (
+            "Xc (%) = ΔHm / ΔHf100 × 100. O valor de ΔHf100 é específico do "
+            "polímero e da forma cristalina. Prefira 'verified' quando houver."
+        ),
+        "references": crystallinity_options(),
+    }

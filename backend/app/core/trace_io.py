@@ -489,6 +489,369 @@ def _clean_procedure(raw: str) -> str:
     return cleaned.replace("Â°", "°").replace("\u00c2\u00b0", "°")
 
 
+# ---------------------------------------------------------------------------
+# Espectros com eixos declarados em linhas próprias (JASCO, PerkinElmer)
+# ---------------------------------------------------------------------------
+#
+# Nem todo instrumento rotula as colunas. Um FTIR da JASCO sai assim::
+#
+#     TITLE<TAB>ldpe sbc 818 0
+#     DATA TYPE<TAB>INFRARED SPECTRUM
+#     XUNITS<TAB>1/CM
+#     YUNITS<TAB>ABSORBANCE
+#     NPOINTS<TAB>3736
+#     XYDATA
+#     399,1927<TAB>0,0104689
+#     400,1569<TAB>0,022843
+#
+# O bloco de cabeçalho é ``CHAVE<TAB>valor``, sem ``#`` nenhum, e os eixos não
+# têm rótulo de coluna: quem os descreve são as chaves ``XUNITS`` e ``YUNITS``,
+# em linhas separadas. A linha ``XYDATA`` marca onde o cabeçalho termina.
+#
+# Um leitor que procura ``#CHAVE:valor`` não encontra metadado algum e, pior,
+# toma ``TITLE<TAB>ldpe sbc 818 0`` como o cabeçalho de colunas: sobra uma
+# "coluna" chamada TITLE, os eixos ficam sem papel e a resolução recusa o
+# arquivo com "não encontrei a coluna de número de onda" -- mesmo o arquivo
+# estando íntegro e os eixos declarados. Foi exatamente o que aconteceu com o
+# ``FTIR_spectra_LDPE-SBC-818_0_2.txt``.
+#
+# O mesmo vale para o CSV do PerkinElmer Spectrum, que traz::
+#
+#     \ufeffCreated as New Dataset,PE pellet 124kDa Alfa Aesar
+#     cm-1,%T
+#     4000.00,99.66
+#
+# Aqui há cabeçalho de coluna, mas ele é ``cm-1`` e ``%T`` -- unidades, não
+# grandezas. ``_match_role`` casa ``cm-1`` pela unidade (já previsto), e o
+# ``%T`` casa ``transmittance`` pelo token ``%t``; a linha de metadados antes
+# dele, porém, seria lida como a primeira linha de dados. O adaptador remove o
+# preâmbulo e reaproveita o caminho de texto comum.
+
+#: Chaves de cabeçalho, normalizadas, que descrevem o eixo x.
+_X_KEYS = ("xunits", "x units", "x-units", "xaxis units", "horizontal axis")
+#: Chaves que descrevem o eixo y.
+_Y_KEYS = ("yunits", "y units", "y-units", "yaxis units", "vertical axis")
+
+#: Marcadores que separam o cabeçalho dos dados nestes instrumentos.
+_DATA_MARKERS = frozenset({"xydata", "data", "##xydata"})
+
+#: Chaves de cabeçalho que carregam o nome da amostra.
+_SAMPLE_KEYS = ("title", "sample name", "samplename", "sample", "name", "identity")
+
+#: Tradução da unidade declarada para o vocabulário da UNIT_TABLE.
+_UNIT_ALIASES: dict[str, str] = {
+    "1/cm": "cm-1",
+    "1/cm-1": "cm-1",
+    "cm^-1": "cm-1",
+    "cm-1": "cm-1",
+    "wavenumber": "cm-1",
+    "nm": "nm",
+    "um": "um",
+    "absorbance": "au",
+    "abs": "au",
+    "a.u.": "au",
+    "%t": "pct",
+    "%transmittance": "pct",
+    "transmittance": "pct",
+    "t": "pct",
+}
+
+#: Papéis que estes arquivos declaram, por unidade. A grandeza vem do eixo e
+#: da unidade: ``1/CM`` só pode ser número de onda, ``ABSORBANCE`` só pode ser
+#: absorbância. Não há ambiguidade a resolver, ao contrário do DSC.
+_AXIS_ROLE_BY_UNIT: dict[str, str] = {
+    "cm-1": "wavenumber",
+    "nm": "wavenumber",
+    "um": "wavenumber",
+    "au": "absorbance",
+    "pct": "transmittance",
+}
+
+
+def _norm_unit_token(raw: str) -> str:
+    """Normaliza a unidade declarada para a chave da UNIT_TABLE."""
+    t = raw.strip().lower().replace(" ", "")
+    # ``1/CM`` -> ``1/cm``; ``%T`` já é minúsculo.
+    return _UNIT_ALIASES.get(t, t)
+
+
+def _looks_like_keyval_spectrum(lines: Sequence[str]) -> bool:
+    """
+    Reconhece o cabeçalho ``CHAVE<TAB>valor`` destes espectros.
+
+    Três sinais, todos ausentes de um arquivo NETZSCH e de um CSV de duas
+    colunas comuns:
+
+    * uma linha ``XYDATA`` (JASCO), que marca onde os dados começam;
+    * uma chave ``XUNITS``/``YUNITS`` (JASCO e PerkinElmer), que declara o eixo;
+    * um cabeçalho de colunas que é **só unidades** -- ``cm-1,%T`` -- como o
+      CSV do PerkinElmer Spectrum escreve. Um CSV comum rotula as colunas com
+      uma grandeza (``wavenumber``, ``absorbance``); um cabeçalho em que os
+      dois campos são unidades puras só aparece neste instrumento, e tratá-lo
+      aqui é o que evita ler a linha ``Created as New Dataset,PE pellet`` como
+      se fosse a primeira linha de dados.
+    """
+    head = [ln.strip() for ln in lines[:80] if ln.strip()]
+    for ln in head:
+        low = ln.lower()
+        if low in _DATA_MARKERS:
+            return True
+        # Cabeçalho ``cm-1,%T`` / ``cm-1,%T``: dois campos, ambos unidades.
+        for sep in ("\t", ",", ";"):
+            if sep in ln:
+                toks = [t.strip() for t in ln.split(sep)]
+                if (
+                    len(toks) == 2
+                    and _norm_unit_token(toks[0]) in _AXIS_ROLE_BY_UNIT
+                    and _norm_unit_token(toks[1]) in _AXIS_ROLE_BY_UNIT
+                ):
+                    return True
+        if "\t" in ln:
+            key = ln.split("\t", 1)[0].strip().lower()
+            if key in _X_KEYS or key in _Y_KEYS:
+                return True
+    return False
+
+
+def _read_keyval_spectrum(p: Path, text: str) -> TraceFile:
+    """
+    Lê um espectro cujos eixos são declarados em linhas ``CHAVE<TAB>valor``.
+
+    Devolve o mesmo ``TraceFile`` do caminho de texto: o cabeçalho vira
+    ``metadata`` e o par de eixos vira duas colunas com papel e unidade. A
+    resolução de papéis, a conversão de unidades e a validação de coerência
+    continuam sendo as mesmas -- esta é uma terceira porta, não um terceiro
+    parser.
+    """
+    lines = [ln.rstrip("\r\n") for ln in text.split("\n")]
+
+    meta: dict[str, str] = {}
+    x_unit_raw: str | None = None
+    y_unit_raw: str | None = None
+    data_start: int | None = None
+
+    for i, line in enumerate(lines):
+        s = line.strip()
+        if not s:
+            continue
+        # ``XYDATA`` (ou ``##XYDATA``) marca o fim do cabeçalho.
+        if s.lower() in _DATA_MARKERS:
+            data_start = i + 1
+            break
+        # ``CHAVE<TAB>valor`` (JASCO). Também aceita ``CHAVE ; valor``.
+        parts = None
+        if "\t" in line:
+            parts = line.split("\t", 1)
+        elif ";" in line and line.count(";") == 1:
+            parts = line.split(";", 1)
+        if parts is None:
+            # Linha sem par: pode ser o cabeçalho de colunas do PerkinElmer
+            # (``cm-1,%T``). Guardar o índice para tratar depois.
+            continue
+        key = parts[0].strip().lower()
+        val = parts[1].strip()
+        if not key:
+            continue
+        if key in _X_KEYS:
+            x_unit_raw = val
+            # Guardar também em metadata: a prévia precisa poder mostrar o que
+            # o arquivo declarou, e não só o papel resolvido. Um campo que some
+            # depois de usado não pode ser auditado pelo usuário.
+            meta.setdefault(key, val)
+            continue
+        if key in _Y_KEYS:
+            y_unit_raw = val
+            meta.setdefault(key, val)
+            continue
+        meta.setdefault(key, val)
+
+    # O nome da amostra vem de TITLE/SAMPLE. Publicá-lo sob "sample" é o que
+    # faz a resolução de polímero do PAT funcionar.
+    for k in _SAMPLE_KEYS:
+        if k in meta and meta[k].strip():
+            meta["sample"] = meta[k].strip()
+            break
+
+    if data_start is None:
+        # Sem ``XYDATA``: o bloco de dados começa na primeira linha que traz
+        # dois números; tudo antes é preâmbulo. O PerkinElmer Spectrum escreve
+        # ``Created as New Dataset,<amostra>`` seguido de ``cm-1,%T``, então o
+        # preâmbulo também carrega o nome da amostra.
+        for i, line in enumerate(lines):
+            s = line.strip()
+            if not s:
+                continue
+            toks = [t.strip() for t in re.split(r"[\t,;]", s)]
+            if len(toks) >= 2:
+                # A linha ``cm-1,%T`` não é dado.
+                if (
+                    _norm_unit_token(toks[0]) in _AXIS_ROLE_BY_UNIT
+                    and _norm_unit_token(toks[1]) in _AXIS_ROLE_BY_UNIT
+                ):
+                    continue
+                if _to_float(toks[0]) is not None and _to_float(toks[1]) is not None:
+                    data_start = i
+                    break
+        # O nome da amostra no preâmbulo do PerkinElmer: ``Created as New
+        # Dataset,PE pellet 124kDa`` -- o segundo campo é a amostra.
+        if data_start is not None and not meta.get("sample"):
+            for ln in lines[:data_start]:
+                toks = [t.strip() for t in re.split(r"[\t,;]", ln.strip())]
+                if len(toks) >= 2 and _to_float(toks[0]) is None:
+                    cand = toks[1].strip()
+                    if cand and not cand.lower().startswith(("cm-1", "%t")):
+                        meta["sample"] = cand
+                        break
+    if data_start is None:
+        raise TraceImportError(
+            f"{p.name}: o cabeçalho foi lido, mas não encontrei o início dos "
+            "dados. Um espectro JASCO/PerkinElmer traz uma linha 'XYDATA' "
+            "antes dos pontos."
+        )
+
+    # Separador e decimal dos dados. O JASCO escreve vírgula decimal e TAB
+    # como separador de campo (``399,1927\t0,0104689``), o que torna ambíguo
+    # um arquivo separado por vírgula. Decidir pelo contexto: se a linha tem
+    # TAB, o TAB separa e a vírgula é decimal.
+    sample_rows = [ln for ln in lines[data_start : data_start + 200] if ln.strip()]
+    if not sample_rows:
+        raise TraceImportError(f"{p.name}: o marcador de dados existe mas não há pontos.")
+    body_lines = [ln.strip() for ln in lines[data_start:] if ln.strip()]
+    rows = _parse_axis_pair_rows(body_lines)
+    if not rows:
+        raise TraceImportError(f"{p.name}: nenhuma linha de dados numérica foi lida.")
+
+    # Papéis e unidades vêm do cabeçalho. Sem declaração, a unidade é inferida
+    # do cabeçalho de colunas quando existe (``cm-1,%T``).
+    x_unit = _norm_unit_token(x_unit_raw) if x_unit_raw else ""
+    y_unit = _norm_unit_token(y_unit_raw) if y_unit_raw else ""
+    if not x_unit or not y_unit:
+        # PerkinElmer: a linha ``cm-1,%T`` antes dos dados traz as unidades.
+        for ln in lines[: data_start]:
+            toks = [t.strip() for t in re.split(r"[\t,;]", ln.strip())]
+            if len(toks) == 2:
+                a, b = _norm_unit_token(toks[0]), _norm_unit_token(toks[1])
+                if a in _AXIS_ROLE_BY_UNIT and b in _AXIS_ROLE_BY_UNIT:
+                    x_unit, y_unit = a, b
+                    break
+
+    x_role = _AXIS_ROLE_BY_UNIT.get(x_unit)
+    y_role = _AXIS_ROLE_BY_UNIT.get(y_unit)
+    if x_role is None or y_role is None:
+        raise TraceImportError(
+            f"{p.name}: o cabeçalho declara XUNITS='{x_unit_raw or '?'}' e "
+            f"YUNITS='{y_unit_raw or '?'}', que não sei mapear. Espectros "
+            "conhecidos: XUNITS em 1/CM (número de onda) e YUNITS em "
+            "ABSORBANCE ou %T."
+        )
+
+    # Papel pelo nome do cabeçalho, quando houver, para não perder um rótulo
+    # explícito (e para casar ``%t`` -> transmittance).
+    x_header = x_unit_raw or x_unit
+    y_header = y_unit_raw or y_unit
+
+    columns = [
+        ParsedColumn(
+            index=0,
+            raw_header=x_header,
+            role=x_role,
+            unit=x_unit,
+            factor=None,
+            values=[r[0] for r in rows],
+        ),
+        ParsedColumn(
+            index=1,
+            raw_header=y_header,
+            role=y_role,
+            unit=y_unit,
+            factor=None,
+            values=[r[1] for r in rows],
+        ),
+    ]
+    for c in columns:
+        _assign_factor(c)
+
+    # Um FTIR que exporta transmitância precisa virar absorbância: a análise
+    # pede absorbância e recusa (corretamente) %T. Converter aqui é a decisão
+    # do leitor, e vai como aviso para o usuário poder discordar.
+    warnings: list[str] = []
+    y_col = columns[1]
+    if y_role == "transmittance":
+        # Um %T acima de 100 é deriva de linha de base, não sinal: o
+        # instrumento calibra o fundo e o ruído deixa o "100%" variar alguns
+        # décimos. Converter ao pé da letra daria absorbância **negativa**
+        # (A = 2 - log10(100,22) = -0,00095), e a análise de FTIR recusa
+        # absorbância negativa -- o PLA-1 do conjunto figshare (baseline entre
+        # 88 e 100,2 %T, praticamente transparente) caía exatamente nisso. O
+        # teto é aplicado em 100 porque acima disso a transmitância é
+        # fisicamente impossível.
+        n_over = sum(1 for t in y_col.values if t > 100.0)
+        converted = []
+        for t in y_col.values:
+            tc = t if t <= 100.0 else 100.0
+            # A = 2 - log10(%T), com %T em 0..100. Um %T <= 0 não tem
+            # absorbância finita e vira NaN, que a resolução descarta contando.
+            converted.append(2.0 - np.log10(tc) if tc > 0 else float("nan"))
+        y_col.values = converted
+        y_col.raw_header = "Absorbance (convertida de %T)"
+        y_col.unit = "au"
+        y_col.role = "absorbance"
+        y_col.factor = 1.0
+        warnings.append(
+            "O arquivo exporta %T (transmitância); converti para absorbância "
+            "com A = 2 - log10(%T), que é a grandeza que a análise de FTIR pede."
+        )
+        if n_over:
+            warnings.append(
+                f"{n_over} ponto(s) traziam %T acima de 100 (deriva de linha "
+                "de base do instrumento); limitei a 100 antes de converter, "
+                "porque transmitância acima de 100 % é fisicamente impossível "
+                "e daria absorbância negativa, que a análise recusa."
+            )
+
+    return TraceFile(path=str(p), metadata=meta, columns=columns, warnings=warnings)
+
+
+def _parse_axis_pair_rows(body_lines: Sequence[str]) -> list[tuple[float, float]]:
+    """
+    Lê pares x,y tolerando o separador e o decimal de cada instrumento.
+
+    O caso difícil é a vírgula: ela é separador de campo no CSV do PerkinElmer
+    e decimal no texto do JASCO. A regra é por linha: se houver TAB, ele separa
+    e a vírgula é decimal; se não houver TAB e houver exatamente uma vírgula
+    com dígitos dos dois lados, a vírgula separa e o ponto é decimal. Quando há
+    mais de uma vírgula, a vírgula é decimal.
+    """
+    out: list[tuple[float, float]] = []
+    for ln in body_lines:
+        toks: list[str]
+        if "\t" in ln:
+            toks = ln.split("\t")
+        else:
+            ncomma = ln.count(",")
+            if ncomma == 1:
+                toks = ln.split(",")
+            elif ncomma >= 2 and "." not in ln:
+                # ``399,1927,0,0104689``: vírgulas decimais. Separar no último
+                # par não é seguro; usar o parser de campos posicionais abaixo.
+                toks = []
+            else:
+                toks = ln.split()
+        if len(toks) < 2:
+            # Última tentativa: dois números por regex, com , ou . como decimal.
+            nums = re.findall(r"-?\d+(?:[.,]\d+)?(?:[eE][-+]?\d+)?", ln)
+            if len(nums) >= 2:
+                a, b = _to_float(nums[0]), _to_float(nums[1])
+                if a is not None and b is not None:
+                    out.append((a, b))
+            continue
+        # Campos podem trazer vírgula decimal mesmo separados por TAB.
+        a, b = _to_float(toks[0]), _to_float(toks[1])
+        if a is not None and b is not None:
+            out.append((a, b))
+    return out
+
+
 def _read_tri_as_trace_file(p: Path) -> TraceFile:
     """Converte um .tri no mesmo ``TraceFile`` que o caminho de texto produz."""
     # Import tardio: o leitor binário importa numpy, e o caminho de texto não
@@ -604,6 +967,14 @@ def read_trace_file(path: str | Path) -> TraceFile:
 
     text = _decode(raw)
     lines = text.split("\n")
+
+    # Terceira porta: espectros que declaram os eixos em linhas próprias
+    # (JASCO ``XUNITS``/``XYDATA``, PerkinElmer ``cm-1,%T``). Reconhecidos
+    # antes do caminho de texto porque aquele tomaria a linha ``TITLE<TAB>...``
+    # como cabeçalho de colunas e perderia os eixos.
+    if _looks_like_keyval_spectrum(lines):
+        return _read_keyval_spectrum(p, text)
+
     meta, body = _split_header_and_body(lines)
 
     if not body:
