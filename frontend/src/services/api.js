@@ -109,6 +109,37 @@ export const thermalApi = {
       smooth_window: smoothWindow,
       sample_name: sampleName,
     }),
+
+  /**
+   * Upload an instrument file and let the server say what it found.
+   *
+   * The panel used to parse the file in the browser and post the two numbers
+   * it had picked by position. On a NETZSCH export the second column is
+   * *time*, so the trace analysed was temperature against time, in the wrong
+   * unit, with nothing reporting it. The server reader resolves each column's
+   * role from its label and unit; this is the only way to reach it.
+   */
+  importFile: (file, target) => {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('target', target);
+    return http.post('/api/v1/thermal/import', form);
+  },
+
+  /**
+   * Upload an instrument file and analyse it in one step.
+   *
+   * The heating rate is not sent: the server reads it from the instrument
+   * header, which is the only place it is authoritative. Offering it as a
+   * form field here would invite a second, silently differing value.
+   */
+  analyseFile: (file, target, { refEnthalpy = null } = {}) => {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('target', target);
+    if (refEnthalpy !== null) form.append('ref_enthalpy_J_g', String(refEnthalpy));
+    return http.post('/api/v1/thermal/analyse', form);
+  },
 };
 
 export const mechanicalApi = {

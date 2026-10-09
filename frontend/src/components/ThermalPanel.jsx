@@ -46,36 +46,76 @@ export default function ThermalPanel() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [fileNote, setFileNote] = useState('');
+  const [fileImport, setFileImport] = useState(null);
 
   const isTga = mode === 'tga';
   const modeLabel = isTga ? t('thermal.tga') : t('thermal.dsc');
   const currentText = isTga ? tgaText : dscText;
 
   /**
-   * A file fills the same textarea the paste box uses, so the two routes
-   * cannot drift apart: whatever the parser accepts by hand, it accepts from
-   * a file. Nothing is uploaded here — only the parsed numbers reach the API.
+   * A file is read by the server, not by the browser.
+   *
+   * This panel used to parse the upload here and rebuild a two-column text
+   * from the first two numbers on each line. On a NETZSCH export the second
+   * column is *time*, so the trace that reached the analysis was temperature
+   * against time, read as though the time were a heat flow in W/g. Nothing
+   * failed: the plot drew, the numbers came out, and every one of them was
+   * about the wrong quantity. Position is not a column identity -- only the
+   * label and the unit are -- and the server is where that is decided.
+   *
+   * The resolved columns are written back into the same box the paste route
+   * uses, so the two paths stay comparable and the numbers on screen are the
+   * ones that will be analysed. What the reader decided is kept in
+   * ``fileImport`` and shown, because a silent reinterpretation is the failure
+   * this whole exercise is about.
    */
-  const loadFile = (text, file) => {
+  const loadFile = async (file) => {
     setError('');
     setFileNote('');
+    setFileImport(null);
     if (!file) {
       if (isTga) setTgaText('');
       else setDscText('');
       return;
     }
-    const { x, y } = parseTwoColumns(text);
-    if (x.length === 0) {
-      setError(t('file.noPoints', { name: file.name }));
-      return;
+    setLoading(true);
+    try {
+      const res = await thermalApi.importFile(file, isTga ? 'tga' : 'dsc');
+      const data = res.data || {};
+      const xs = data.temperature || [];
+      const ys = data.signal || [];
+      if (xs.length === 0 || ys.length === 0) {
+        setError(t('file.noPoints', { name: file.name }));
+        return;
+      }
+      // O que o servidor resolveu é o que a análise vai receber. O cabeçalho
+      // resolvido é escrito junto: sem ele a caixa mostra duas colunas sem
+      // nome, e quem reler o arquivo depois -- ou colar o texto em outro
+      // lugar -- não tem como saber qual delas é a temperatura. O rótulo é a
+      // única coisa que identifica a coluna.
+      const rebuilt =
+        `##${data.x_label}\t${data.y_label}\n` +
+        xs.map((v, i) => `${v}\t${ys[i]}`).join('\n');
+      if (isTga) setTgaText(rebuilt);
+      else setDscText(rebuilt);
+      setFileImport({
+        name: file.name,
+        xLabel: data.x_label,
+        yLabel: data.y_label,
+        n: xs.length,
+        sampleName: data.sample_name,
+        massMg: data.sample_mass_mg,
+        heatingRate: data.heating_rate_K_min,
+        notes: data.notes || [],
+        // O preview do /import não traz refusals; só a análise traz. Ler com
+        // fallback evita derrubar a renderização por um campo ausente.
+        refusals: data.refusals || [],
+      });
+    } catch (err) {
+      setError(describeError(err));
+    } finally {
+      setLoading(false);
     }
-    const rebuilt = x.map((v, i) => `${v}\t${y[i]}`).join('\n');
-    if (isTga) setTgaText(rebuilt);
-    else setDscText(rebuilt);
-    setFileNote(
-      t('file.loaded', { name: file.name, n: x.length }) +
-        (x.length < 10 ? ` ${t('thermal.shortTraceWarning')}` : ''),
-    );
   };
 
   /**
@@ -88,6 +128,7 @@ export default function ThermalPanel() {
     else setDscText('');
     setResult(null);
     setError('');
+    setFileImport(null);
     setFileNote(t('thermal.cleared'));
   };
 
@@ -102,6 +143,7 @@ export default function ThermalPanel() {
     setResult(null);
     setError('');
     setFileNote('');
+    setFileImport(null);
   };
 
   const hasData = parseTwoColumns(currentText).x.length > 0;
@@ -178,14 +220,50 @@ export default function ThermalPanel() {
         </p>
 
         <FileDrop
-          onText={loadFile}
+          onFile={loadFile}
           onError={setError}
-          hint={t('file.accepted', { list: 'CSV, TSV, TXT, DAT, ASC' })}
+          accept=".txt,.csv,.tsv,.dat,.asc,.prn,.tri"
+          hint={t('file.accepted', { list: 'CSV, TSV, TXT, DAT, ASC, TRI' })}
         />
         {fileNote ? (
           <p className="preview-meta" role="status">
             {fileNote}
           </p>
+        ) : null}
+        {fileImport ? (
+          <div className="preview-meta" role="status">
+            <p>
+              <strong>{fileImport.name}</strong> — {fileImport.n} {t('thermal.points')}
+            </p>
+            <ul className="column-list">
+              <li>
+                {t('thermal.xAxis')}: <code>{fileImport.xLabel}</code>
+              </li>
+              <li>
+                {t('thermal.yAxis')}: <code>{fileImport.yLabel}</code>
+              </li>
+              {fileImport.sampleName ? (
+                <li>
+                  {t('thermal.sample')}: <code>{fileImport.sampleName}</code>
+                </li>
+              ) : null}
+              {fileImport.massMg ? (
+                <li>
+                  {t('thermal.mass')}: <code>{fileImport.massMg} mg</code>
+                </li>
+              ) : null}
+              {fileImport.heatingRate ? (
+                <li>
+                  {t('thermal.heatingRate')}: <code>{fileImport.heatingRate} K/min</code>
+                </li>
+              ) : null}
+            </ul>
+            {fileImport.refusals.map((r) => (
+              <p key={r} className="field-hint">
+                {r}
+              </p>
+            ))}
+          </div>
         ) : null}
         {isTga ? (
           <TraceInput

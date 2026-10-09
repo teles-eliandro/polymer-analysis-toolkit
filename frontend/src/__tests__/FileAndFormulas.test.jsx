@@ -19,7 +19,12 @@ import FileDrop from '../components/FileDrop';
 import { Formula, FormulaDisclosure } from '../components/Formula';
 
 jest.mock('../services/api', () => ({
-  thermalApi: { tga: jest.fn(), dsc: jest.fn() },
+  thermalApi: {
+    tga: jest.fn(),
+    dsc: jest.fn(),
+    importFile: jest.fn(),
+    analyseFile: jest.fn(),
+  },
   describeError: (e) => String(e),
 }));
 
@@ -146,24 +151,61 @@ describe('formula disclosure', () => {
 });
 
 describe('ThermalPanel file route', () => {
-  test('fills the trace box from a file so both routes share one parser', async () => {
+  /**
+   * The file goes to the server, which decides what each column is.
+   *
+   * The previous version of this test asserted that the panel parsed the file
+   * itself and rebuilt a two-column text from the first two numbers on each
+   * line. That is the defect: on a NETZSCH export the second column is time,
+   * so the trace reaching the analysis was temperature against time, in the
+   * wrong unit, with nothing reporting it. The assertion below is the inverse
+   * -- the reader's own verdict on the axes must be the one displayed.
+   */
+  test('sends the file to the server reader and shows the resolved axes', async () => {
+    const { thermalApi } = require('../services/api');
+    thermalApi.importFile.mockResolvedValue({
+      data: {
+        x_label: 'Temp./°C',
+        y_label: 'DSC/(mW/mg)',
+        temperature: [27.4, 50.0, 107.3, 150.0, 194.4],
+        signal: [-0.05, 0.2, 0.67, 0.3, 0.02],
+        n_values: 5,
+        sample_name: '20-100',
+        sample_mass_mg: 4.75,
+        heating_rate_K_min: 10,
+        notes: [],
+        refusals: [],
+      },
+    });
     renderWithI18n(<ThermalPanel />);
 
-    const csv = '30,100\n100,99\n350,85\n500,40\n800,10\n';
-    const file = new File([csv], 'pei.csv', { type: 'text/csv' });
+    const file = new File(['#SAMPLE:20-100\n##Temp./°C;Time/min;DSC/(mW/mg)\n27.4;91;0.1\n'], 'dsc.txt', {
+      type: 'text/plain',
+    });
     const input = document.querySelector('input[type="file"]');
     fireEvent.change(input, { target: { files: [file] } });
 
     await waitFor(() => {
-      const area = document.querySelector('textarea');
-      expect(area.value).toContain('350');
-      expect(area.value.split('\n').length).toBe(5);
+      expect(thermalApi.importFile).toHaveBeenCalled();
     });
-    // The load is reported, not silent.
-    expect(screen.getByRole('status').textContent).toMatch(/5/);
+    // The two axes the reader resolved are what the panel reports, so a
+    // mis-read column is visible rather than implied by a plausible plot.
+    // Both must also reach the trace box, whose header is what identifies
+    // each column if the text is ever re-read.
+    await waitFor(() => {
+      expect(screen.getAllByText(/DSC\/\(mW\/mg\)/).length).toBeGreaterThan(0);
+    });
+    expect(screen.getAllByText(/Temp\.\/°C/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/20-100/)).toBeTruthy();
+    const area = document.querySelector('textarea');
+    expect(area.value).toContain('##Temp./°C');
+    expect(area.value).toContain('DSC/(mW/mg)');
+    expect(area.value.split('\n').length).toBe(6);
   });
 
-  test('reports a file with no numeric pairs instead of sending nothing', async () => {
+  test('reports a server failure instead of showing an empty plot', async () => {
+    const { thermalApi } = require('../services/api');
+    thermalApi.importFile.mockRejectedValue(new Error('no numeric columns'));
     renderWithI18n(<ThermalPanel />);
     const file = new File(['not,a,number\nhere,either,at,all\n'], 'junk.csv', {
       type: 'text/csv',
@@ -172,7 +214,7 @@ describe('ThermalPanel file route', () => {
     fireEvent.change(input, { target: { files: [file] } });
 
     await waitFor(() => {
-      expect(screen.getByRole('alert').textContent).toMatch(/junk\.csv/);
+      expect(screen.getByRole('alert').textContent).toMatch(/no numeric columns/);
     });
   });
 
