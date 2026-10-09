@@ -80,9 +80,11 @@ class Polymer:
 #: keyed on clean names has to be matched tolerantly or it will never fire.
 ALIASES: dict[str, str] = {
     "pe": "PE",
-    "hdpe": "PE",
-    "ldpe": "PE",
     "lldpe": "PE",
+    # hdpe/ldpe deliberately do NOT appear here: they name their own grades
+    # (HDPE/LDPE below), and a duplicate key would silently win or lose by
+    # source order. Keeping the specific mapping only is what makes the
+    # resolution of "HDPE" deterministic.
     "pe-new": "PE",
     "pp": "PP",
     "ps": "PS",

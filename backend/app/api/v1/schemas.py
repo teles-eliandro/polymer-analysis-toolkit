@@ -168,7 +168,7 @@ class DSCResult(BaseModel):
     temperature: list[float]
     heat_flow: list[float]
     direction: str
-    claims: dict[str, "FieldClaim"] = Field(
+    claims: dict[str, FieldClaim] = Field(
         default_factory=dict,
         description=(
             "What each reported number is worth, keyed by field name. Every "

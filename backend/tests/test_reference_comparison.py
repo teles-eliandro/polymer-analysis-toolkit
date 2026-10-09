@@ -15,8 +15,6 @@ the detector. The distinction is what these tests protect.
 
 from __future__ import annotations
 
-import pytest
-
 from app.core.compare import (
     NOT_COMPARABLE,
     OUTSIDE,

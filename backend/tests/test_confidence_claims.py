@@ -33,10 +33,10 @@ import numpy as np
 import pytest
 
 from app.core.thermal import (
+    _CONFIDENCE_RANK,
     FORMULA,
     READ,
     SUGGESTED,
-    _CONFIDENCE_RANK,
     analyse_dsc,
 )
 
