@@ -190,7 +190,7 @@ export default function ThermalPanel() {
         {isTga ? (
           <TraceInput
             label={`${t('thermal.temperature')} / ${t('thermal.massPct')}`}
-            hint="One row per point: temperature mass_percent. Comma, tab or space separated."
+            hint={t('thermal.hint.tga')}
             placeholder={'30\t100\n100\t99\n350\t85\n500\t40\n800\t10'}
             value={tgaText}
             onChange={setTgaText}
@@ -199,7 +199,7 @@ export default function ThermalPanel() {
           <>
             <TraceInput
               label={`${t('thermal.temperature')} / ${t('thermal.heatFlow')}`}
-              hint="One row per point: temperature heat_flow_w_per_g. Endothermic up."
+              hint={t('thermal.hint.dsc')}
               placeholder={'0\t0.30\n100\t0.85\n165\t3.30\n250\t0.35'}
               value={dscText}
               onChange={setDscText}

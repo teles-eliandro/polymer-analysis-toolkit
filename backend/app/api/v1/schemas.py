@@ -240,6 +240,16 @@ class PropertyComparison(BaseModel):
     reason: str | None = Field(
         None, description="Why the comparison could not be made, when it could not."
     )
+    reason_code: str | None = Field(
+        None,
+        description=(
+            "Stable identifier for `reason`, for clients that present the "
+            "interface in another language: 'polymer_unidentified', "
+            "'value_not_reported', 'value_unstable', 'no_range_for_property', "
+            "or 'unit_mismatch'. The `reason` prose stays canonical; a client "
+            "that does not know the code shows it unchanged."
+        ),
+    )
     polymer: str | None = Field(None, description="The polymer compared against.")
 
 

@@ -206,9 +206,23 @@ const MESSAGES = {
     'comparison.notReported': 'not reported',
     'comparison.source': 'Source',
     'comparison.polymer': 'Polymer',
+    'comparison.reason.polymer_unidentified':
+      'The polymer was not identified, so there is no published range to compare against. Enter the polymer name to enable the comparison.',
+    'comparison.reason.value_not_reported':
+      'This trace did not yield a value for the property, so there is nothing to compare.',
+    'comparison.reason.value_unstable':
+      'This value is an inference that did not survive the stability check: it moves with the sampling of the trace. Comparing it would present an unstable value as a measurement. Repeat the run before comparing.',
+    'comparison.reason.no_range_for_property':
+      'The reference repertoire holds no published range for this property of this polymer. The absence is deliberate: the polymer may not exhibit this transition at all.',
+    'comparison.reason.unit_mismatch':
+      'The measured value and the published range are in different units, and no conversion is applied silently.',
     'thermal.sampleName': 'Sample name',
     'thermal.sampleNameHint':
       'Used to identify the polymer and compare against published values. Matching is tolerant of instrument naming (PLA1-AR, Nylon66). Left empty, no comparison is made.',
+    'thermal.hint.tga':
+      'One row per point: temperature mass_percent. Comma, tab or space separated.',
+    'thermal.hint.dsc':
+      'One row per point: temperature heat_flow_w_per_g. Endothermic up.',
     'thermal.reliable': 'stable on resampling',
     'thermal.notReliable': 'UNSTABLE - do not quote without repeats',
     'thermal.TgNote':
@@ -580,9 +594,23 @@ const MESSAGES = {
     'comparison.notReported': 'não reportado',
     'comparison.source': 'Fonte',
     'comparison.polymer': 'Polímero',
+    'comparison.reason.polymer_unidentified':
+      'O polímero não foi identificado, então não há faixa publicada para comparar. Informe o nome do polímero para habilitar a comparação.',
+    'comparison.reason.value_not_reported':
+      'Esta curva não forneceu um valor para a propriedade, então não há o que comparar.',
+    'comparison.reason.value_unstable':
+      'Este valor é uma inferência que não passou na verificação de estabilidade: ele varia com a amostragem da curva. Compará-lo apresentaria um valor instável como se fosse uma medição. Repita a análise antes de comparar.',
+    'comparison.reason.no_range_for_property':
+      'O repertório de referência não contém faixa publicada para esta propriedade deste polímero. A ausência é intencional: o polímero pode não apresentar essa transição.',
+    'comparison.reason.unit_mismatch':
+      'O valor medido e a faixa publicada estão em unidades diferentes, e nenhuma conversão é aplicada silenciosamente.',
     'thermal.sampleName': 'Nome da amostra',
     'thermal.sampleNameHint':
       'Usado para identificar o polímero e comparar com valores publicados. A correspondência tolera a nomenclatura do instrumento (PLA1-AR, Nylon66). Se vazio, nenhuma comparação é feita.',
+    'thermal.hint.tga':
+      'Uma linha por ponto: temperatura massa_percentual. Separado por vírgula, tabulação ou espaço.',
+    'thermal.hint.dsc':
+      'Uma linha por ponto: temperatura fluxo_de_calor_w_por_g. Endotérmico para cima.',
     'thermal.reliable': 'estável ao reamostrar',
     'thermal.notReliable': 'INSTÁVEL - não cite sem repetições',
     'thermal.TgNote':
@@ -955,9 +983,23 @@ const MESSAGES = {
     'comparison.notReported': 'no reportado',
     'comparison.source': 'Fuente',
     'comparison.polymer': 'Polímero',
+    'comparison.reason.polymer_unidentified':
+      'El polímero no fue identificado, así que no hay rango publicado con el que comparar. Indique el nombre del polímero para habilitar la comparación.',
+    'comparison.reason.value_not_reported':
+      'Esta curva no produjo un valor para la propiedad, así que no hay nada que comparar.',
+    'comparison.reason.value_unstable':
+      'Este valor es una inferencia que no superó la verificación de estabilidad: varía con el muestreo de la curva. Compararlo presentaría un valor inestable como si fuera una medición. Repita el análisis antes de comparar.',
+    'comparison.reason.no_range_for_property':
+      'El repertorio de referencia no contiene un rango publicado para esta propiedad de este polímero. La ausencia es deliberada: puede que el polímero no presente esa transición.',
+    'comparison.reason.unit_mismatch':
+      'El valor medido y el rango publicado están en unidades distintas, y ninguna conversión se aplica de forma silenciosa.',
     'thermal.sampleName': 'Nombre de la muestra',
     'thermal.sampleNameHint':
       'Se usa para identificar el polímero y comparar con valores publicados. La coincidencia tolera la nomenclatura del instrumento (PLA1-AR, Nylon66). Si está vacío, no se hace ninguna comparación.',
+    'thermal.hint.tga':
+      'Una fila por punto: temperatura masa_porcentual. Separado por coma, tabulación o espacio.',
+    'thermal.hint.dsc':
+      'Una fila por punto: temperatura flujo_de_calor_w_por_g. Endotérmico hacia arriba.',
     'thermal.reliable': 'estable al remuestrear',
     'thermal.notReliable': 'INESTABLE - no citar sin repeticiones',
     'thermal.TgNote':
@@ -1199,7 +1241,19 @@ export function I18nProvider({ children }) {
       }
       return text;
     };
-    return { language, setLanguage, t: translate };
+    /**
+     * Like `t`, but returns null when the key is unknown instead of echoing
+     * the key. Use when the caller holds a server-supplied fallback string:
+     * a missing translation must degrade to that text, not to a dotted key
+     * shown to the user.
+     */
+    const tOrNull = (key) => {
+      const table = MESSAGES[language] || MESSAGES.en;
+      if (table[key] !== undefined) return table[key];
+      if (MESSAGES.en[key] !== undefined) return MESSAGES.en[key];
+      return null;
+    };
+    return { language, setLanguage, t: translate, tOrNull };
   }, [language]);
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;

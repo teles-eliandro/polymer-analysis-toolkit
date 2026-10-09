@@ -102,6 +102,68 @@ def test_a_missing_measurement_is_not_comparable():
     assert c.verdict == NOT_COMPARABLE
 
 
+class TestReasonCodes:
+    """
+    Every NOT_COMPARABLE carries a stable code beside its English prose.
+
+    The code exists so a client presenting another language can translate the
+    reason without the backend holding translation tables. What matters is
+    that the two never drift: a verdict with prose but no code would fall back
+    to English in the Portuguese and Spanish interfaces, and a code with no
+    prose would leave nothing to show a client that does not know it.
+    """
+
+    def test_every_not_comparable_carries_a_code_and_prose(self):
+        cases = [
+            ("unidentified polymer", compare_property("Tg", 100.0, "°C", None)),
+            ("missing measurement", compare_property("Tg", None, "°C", resolve("PS"))),
+            (
+                "unstable suggestion",
+                compare_property(
+                    "Tg", 165.0, "°C", resolve("PP"),
+                    confidence="suggested", stable=False,
+                ),
+            ),
+            ("no range for property", compare_property("Tm", 170.0, "°C", resolve("PS"))),
+            (
+                "unit mismatch",
+                compare_property("Tg", 373.0, "K", resolve("PS")),
+            ),
+        ]
+        for label, c in cases:
+            assert c.verdict == NOT_COMPARABLE, label
+            assert c.reason, f"{label}: no prose to fall back on"
+            assert c.reason_code, f"{label}: no code for a translated client"
+
+    def test_the_codes_are_distinct(self):
+        """Each reason must be separately translatable."""
+        codes = {
+            compare_property("Tg", 100.0, "°C", None).reason_code,
+            compare_property("Tg", None, "°C", resolve("PS")).reason_code,
+            compare_property(
+                "Tg", 165.0, "°C", resolve("PP"),
+                confidence="suggested", stable=False,
+            ).reason_code,
+            compare_property("Tm", 170.0, "°C", resolve("PS")).reason_code,
+            compare_property("Tg", 373.0, "K", resolve("PS")).reason_code,
+        }
+        assert len(codes) == 5, f"codes collide: {codes}"
+
+    def test_the_codes_survive_serialisation(self):
+        """The API serialises through as_dict; the code must be in the JSON."""
+        c = compare_property("Tg", 100.0, "°C", None)
+        d = c.as_dict()
+        assert d["reason_code"] == c.reason_code
+        assert d["reason"] == c.reason
+
+    def test_a_comparable_verdict_carries_no_reason_code(self):
+        """A code on a 'within' verdict would be meaningless, so it is absent."""
+        c = compare_property("Tg", 100.0, "°C", resolve("PS"))
+        assert c.verdict == WITHIN
+        assert c.reason_code is None
+        assert c.reason is None
+
+
 def test_a_unit_mismatch_is_not_converted_silently():
     """
     Kelvin against a Celsius range must not be silently compared: the value

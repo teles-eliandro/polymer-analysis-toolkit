@@ -181,3 +181,97 @@ describe('Comparison against published values', () => {
     expect(call[2]).toMatchObject({ sampleName: 'PS5-AR' });
   });
 });
+
+/**
+ * The reason a comparison could not be made has to reach a reader who is not
+ * reading English.
+ *
+ * The backend sends both a stable code and English prose. The code is what
+ * gets translated; the prose is the fallback. Two failure modes matter and are
+ * asserted separately: showing a raw key like "comparison.reason.x" to a user,
+ * and dropping the reason entirely when the code is unknown to this build.
+ */
+describe('Comparison reason localisation', () => {
+  const rows = () => Array.from(document.querySelectorAll('.comparison'));
+
+  const notComparableRow = (over) =>
+    row({
+      verdict: 'not_comparable',
+      measured: null,
+      reference_low: null,
+      reference_high: null,
+      reference_source: null,
+      reason: 'No published range for Tm of PS is held in the reference repertoire.',
+      reason_code: 'no_range_for_property',
+      ...over,
+    });
+
+  const analyseIn = async (lang) => {
+    render(<App />);
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: lang } });
+    // The language change re-renders every label, so the nav button is found
+    // by its translated name; wait for the switch to settle before clicking.
+    const thermal =
+      lang === 'pt'
+        ? await screen.findByRole('button', { name: /^térmica$/i })
+        : await screen.findByRole('button', { name: /thermal/i });
+    fireEvent.click(thermal);
+    fireEvent.click(screen.getByRole('tab', { name: /dsc/i }));
+    fireEvent.change(document.querySelector('textarea'), {
+      target: { value: '30,0\n100,0.1\n170,0.5\n200,0' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /calcular|calculate/i }));
+    await waitFor(() => expect(screen.getByTestId('plot')).toBeInTheDocument());
+  };
+
+  it('translates the reason into Portuguese when the code is known', async () => {
+    thermalApi.dsc.mockImplementation(() =>
+      Promise.resolve({ data: payload([notComparableRow({})]) }),
+    );
+    await analyseIn('pt');
+
+    const text = rows()[0].textContent;
+    expect(text).toMatch(/repertório|polímero|unidades/i);
+    // The English prose must not leak through when a translation exists.
+    expect(text).not.toMatch(/No published range for Tm of PS is held/);
+  });
+
+  it('never shows a raw translation key to the user', async () => {
+    thermalApi.dsc.mockImplementation(() =>
+      Promise.resolve({ data: payload([notComparableRow({})]) }),
+    );
+    await analyseIn('pt');
+
+    expect(rows()[0].textContent).not.toMatch(/comparison\.reason\./);
+  });
+
+  it('falls back to the server prose for a code this build does not know', async () => {
+    // Forward compatibility: a newer backend may add a code before this
+    // frontend is deployed, and the reason must still be shown.
+    thermalApi.dsc.mockImplementation(() =>
+      Promise.resolve({
+        data: payload([
+          notComparableRow({
+            reason_code: 'a_code_from_a_newer_backend',
+            reason: 'A reason only the server can explain.',
+          }),
+        ]),
+      }),
+    );
+    await analyseIn('pt');
+
+    expect(rows()[0].textContent).toMatch(/A reason only the server can explain/);
+    expect(rows()[0].textContent).not.toMatch(/comparison\.reason\./);
+  });
+
+  it('still shows the prose when the backend sends no code at all', async () => {
+    thermalApi.dsc.mockImplementation(() =>
+      Promise.resolve({
+        data: payload([notComparableRow({ reason_code: null })]),
+      }),
+    );
+    await analyseIn('en');
+
+    expect(rows()[0].textContent).toMatch(/No published range for Tm of PS/);
+  });
+});

@@ -34,10 +34,16 @@ const VERDICT_ICON = {
 
 /** A single comparison row: the value, the range, the verdict, the source. */
 export function ComparisonRow({ comparison }) {
-  const { t } = useI18n();
+  const { t, tOrNull } = useI18n();
   const c = comparison;
   const cls = VERDICT_CLASS[c.verdict] || 'verdict-none';
   const icon = VERDICT_ICON[c.verdict] || '—';
+
+  // Prefer a translation of the reason code; fall back to the server's English
+  // prose, which is the canonical wording. A code this build does not know
+  // must show that prose rather than nothing.
+  const reason =
+    (c.reason_code && tOrNull(`comparison.reason.${c.reason_code}`)) || c.reason;
 
   const hasRange =
     c.reference_low !== null &&
@@ -75,7 +81,7 @@ export function ComparisonRow({ comparison }) {
         ) : null}
       </div>
 
-      {c.reason ? <p className="comparison-reason">{c.reason}</p> : null}
+      {reason ? <p className="comparison-reason">{reason}</p> : null}
 
       {c.reference_note ? (
         <p className="comparison-note">{c.reference_note}</p>

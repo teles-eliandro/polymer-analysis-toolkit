@@ -55,6 +55,11 @@ class Comparison:
     #: Why the comparison could not be made, when the verdict is
     #: NOT_COMPARABLE. Always populated in that case.
     reason: str | None = None
+    #: A stable identifier for the reason, for clients that present the
+    #: interface in a language other than English. ``reason`` stays the
+    #: canonical English prose: a client that does not know this code
+    #: shows it unchanged rather than showing nothing.
+    reason_code: str | None = None
     #: The polymer the value was compared against, when one was identified.
     polymer: str | None = None
 
@@ -73,13 +78,27 @@ class Comparison:
             ),
             "reference_note": self.reference.note if self.reference else None,
             "reason": self.reason,
+            "reason_code": self.reason_code,
             "polymer": self.polymer,
         }
 
 
-def _not_comparable(prop: str, reason: str, **kw) -> Comparison:
+#: The reason a value could not be compared. Clients translate these; the
+#: ``reason`` prose is the fallback when a client does not know the code.
+POLYMER_UNIDENTIFIED = "polymer_unidentified"
+VALUE_NOT_REPORTED = "value_not_reported"
+VALUE_UNSTABLE = "value_unstable"
+NO_RANGE_FOR_PROPERTY = "no_range_for_property"
+UNIT_MISMATCH = "unit_mismatch"
+
+
+def _not_comparable(prop: str, reason: str, code: str, **kw) -> Comparison:
     return Comparison(
-        property=prop, verdict=NOT_COMPARABLE, reason=reason, **kw
+        property=prop,
+        verdict=NOT_COMPARABLE,
+        reason=reason,
+        reason_code=code,
+        **kw,
     )
 
 
@@ -121,6 +140,7 @@ def compare_property(
             "The polymer was not identified, so there is no published range to "
             "compare against. Selecting the polymer explicitly would allow the "
             "comparison.",
+            POLYMER_UNIDENTIFIED,
         )
 
     if measured is None:
@@ -128,6 +148,7 @@ def compare_property(
             prop,
             f"{prop} was not reported for this trace, so there is nothing to "
             "compare.",
+            VALUE_NOT_REPORTED,
             polymer=polymer.key,
         )
 
@@ -141,6 +162,7 @@ def compare_property(
             "(it moves with the sampling of this trace). Comparing it against a "
             "published range would present an unstable value as a measurement. "
             "Repeat the run before comparing.",
+            VALUE_UNSTABLE,
             measured=measured,
             unit=unit,
             polymer=polymer.key,
@@ -152,6 +174,7 @@ def compare_property(
             prop,
             f"No published range for {prop} of {polymer.key} is held in the "
             "reference repertoire.",
+            NO_RANGE_FOR_PROPERTY,
             measured=measured,
             unit=unit,
             polymer=polymer.key,
@@ -162,6 +185,7 @@ def compare_property(
             prop,
             f"The measured value is in {unit} and the published range is in "
             f"{ref.unit}; no conversion is applied silently.",
+            UNIT_MISMATCH,
             measured=measured,
             unit=unit,
             reference=ref,
