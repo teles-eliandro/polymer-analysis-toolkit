@@ -82,6 +82,40 @@ _MIN_TG_SYMMETRY = 0.5
 #: median gradient.
 _MIN_DERIV_SIGNIFICANCE = 3.0
 
+#: How many samples the trace must leave a candidate extremum before it comes
+#: back, for that extremum to count as a melting or crystallisation peak. This
+#: is the half-width of the search neighbourhood in ``_find_peak_temperature``.
+#: Three samples is the floor that rejects single-point instrument noise while
+#: still accepting a sharp endotherm; the value is capped at an eighth of the
+#: scan so that a very short trace is not left with no searchable interior.
+_PEAK_ORDER = 12
+
+#: Window, in degrees Celsius, over which a melting/crystallisation peak's
+#: prominence is measured. The detector's own neighbourhood (``_PEAK_ORDER``) is
+#: only a dozen samples wide -- enough to tell an apex from single-point noise,
+#: but far too narrow to judge how big the event is. On the figshare 24462004
+#: PLA trace the melting endotherm sits on a strong downward drift: within
+#: +-0.8 C it stands only 1 % proud of its neighbours, while measured over the
+#: physical width of the transition it is 35-47 % of the trace range. A melting
+#: endotherm on a 10 K/min scan rises and returns over roughly ten degrees, so
+#: the prominence window is set in degrees and converted to samples using the
+#: trace's own sampling rate.
+_PEAK_QUALIFY_WINDOW_C = 10.0
+
+#: How much of a peak's own height must still be present *after* the event, for
+#: the event to count as a peak rather than a step. ``_find_peak_temperature``
+#: measures the level before the candidate and the level after it; a melting
+#: endotherm comes back down towards the level it started from, while a glass
+#: transition settles at a permanently new level. The ratio (apex - after) /
+#: (apex - before) is near 1 for a clean peak and near 0 for a clean step, and
+#: this floor is what accepts the former and rejects the latter.
+#:
+#: This gate exists because amplitude cannot do the job: on the figshare
+#: 24462004 set the amorphous PS yields a *larger* peak prominence (0.378 of the
+#: trace range) than the genuinely melting PET (0.165), so a threshold on size
+#: alone invents a melting endotherm for a polymer that has none.
+_MIN_PEAK_RETURN = 0.35
+
 #: Minimum width, in degrees Celsius, for a slope peak to be accepted as a
 #: glass transition by ``_derivative_peak``. A real glass transition keeps the
 #: slope elevated across a degree or more; the cell-switching transient at the
@@ -826,6 +860,30 @@ def _find_step_temperature(
     return best
 
 
+def _local_maxima_mask(z: np.ndarray, order: int) -> np.ndarray:
+    """Boolean mask of points that are the maximum of their +-``order`` window.
+
+    Vectorised sliding-window maximum. The nested-loop equivalent is O(n *
+    order) in Python and made the 116-file sweep take minutes per trace, so the
+    sweep never completed; this is O(n log order) through ``np.maximum.reduceat``
+    on a strided view.
+
+    The window is clipped at the array ends, so an end point can be a local
+    maximum -- callers that must not accept a boundary as a peak check the index
+    against ``order`` themselves.
+    """
+    n = z.size
+    if n == 0 or order <= 0:
+        return np.zeros(n, dtype=bool)
+    # Build a (n, 2*order+1) view of the neighbourhood of every point, padded
+    # with -inf so the clip at the ends cannot create false maxima.
+    width = 2 * order + 1
+    padded = np.full(n + 2 * order, -np.inf, dtype=float)
+    padded[order : order + n] = z
+    windows = np.lib.stride_tricks.sliding_window_view(padded, width)
+    return z >= windows.max(axis=1)
+
+
 def _find_peak_temperature(T: np.ndarray, y: np.ndarray) -> int | None:
     """
     Index of the most prominent *peak* (a transient excursion that returns to
@@ -842,57 +900,148 @@ def _find_peak_temperature(T: np.ndarray, y: np.ndarray) -> int | None:
     if n < 5:
         return None
 
-    # First pass: rough peak from the chord residual, only to locate where the
-    # transition is. The chord is adequate for localisation, just not for
-    # integration.
-    chord = np.linspace(float(y[0]), float(y[-1]), n)
-    rough = int(np.argmax(y - chord))
-
-    # A chord residual is positive over a large part of a *monotonic* trace,
-    # because the chord cuts below the curve wherever the latter is convex --
-    # which is most of the range for a step. On a purely amorphous polymer
-    # (atactic polystyrene, 10 K/min, 30-180 C: a glass transition and no
-    # melting endotherm whatsoever) this made the argmax land on the descending
-    # shoulder of the glass transition, and a "melting enthalpy" of 2.7 J/g was
-    # integrated from a region containing no peak at all.
+    # Locate the candidate by shape, not by a chord residual.
     #
-    # The shape that separates the two is the slope at the candidate. A real
-    # melting endotherm is still *rising* at the temperature reported as its
-    # maximum -- the apex is found where the residual stops increasing -- while
-    # the monotonic false positive sits on a part of the curve that is already
-    # falling. A flat or descending slope there means the candidate is a
-    # shoulder, not a peak.
-    slope = float(np.gradient(y, T)[rough])
-    if slope <= 0.0 and (y[rough] - chord[rough]) > 0.0:
+    # The original code used ``argmax(y - chord)`` with ``chord`` joining the
+    # first and last sample. That is degenerate whenever the curve lies entirely
+    # below the chord: the residual's maximum is then exactly 0.0 and occurs at
+    # index 0 by construction, so the "melting temperature" came back as the
+    # first sample of the ramp. On the figshare 24462004 traces this is the norm
+    # rather than the exception -- the heat flow at the start of a ramp is the
+    # global maximum of the series (the sample is coldest there and the
+    # instrument stores exothermic-up), so the curve does sit below the chord
+    # and the bug fires on PLA, EVA, PET, PBT and ABS alike:
+    #
+    #     PLA1-AR   Tm = -90.06   EVA2-AR  Tm = -90.06
+    #     PET2-AR   Tm =  -0.06   PE-NEW   Tm = 159.43  (the last sample)
+    #
+    # A melting endotherm is a *local extremum that returns to its local
+    # baseline*. That definition cannot degenerate: it does not reference the
+    # ends of the scan at all. ``_PEAK_ORDER`` is how many samples the trace
+    # must leave the extremum before coming back, which is what distinguishes a
+    # real endotherm from single-point instrument noise.
+    #
+    # The instrument convention is exothermic-up, so melting is a *minimum* of
+    # the stored heat flow (``analyse_dsc`` inverts the sign before calling
+    # here, see the caller, but this function is also reachable directly from
+    # tests with either convention). Both polarities are therefore tried and the
+    # more prominent excursion wins, which keeps the function independent of the
+    # convention at the call site.
+    order = max(3, min(_PEAK_ORDER, n // 8))
+
+    # The prominence window: the transition width, in samples. A melting
+    # endotherm on a 10 K/min scan rises and returns over roughly ten degrees,
+    # so the window is set in degrees and converted with the trace's own
+    # sampling rate. Measuring prominence over the detector's own narrow
+    # neighbourhood instead was the second half of this bug -- see below.
+    rate = float(np.median(np.diff(T[n // 4 : 3 * n // 4]))) if n >= 4 else 0.0
+    if rate > 0:
+        hw = max(order, min(int(_PEAK_QUALIFY_WINDOW_C / rate), n // 2 - 1))
+    else:
+        hw = max(order, min(n // 10, n // 2 - 1))
+
+    full_range = float(np.nanmax(y) - np.nanmin(y))
+    if full_range <= 0:
         return None
 
-    # Second pass: re-locate using a baseline fitted away from the transition.
+    # Collect every apex of both polarities and score each one, keeping the most
+    # prominent. Assigning the candidate without scoring it -- which is what the
+    # first draft of this function did -- makes the answer depend on iteration
+    # order, so the *last* apex in the trace wins regardless of size. On the
+    # figshare PLA trace that picked a 163.6 C apex of no significance and
+    # rejected it, discarding the real melting endotherm at 151.2 C that was
+    # sitting in the same candidate list.
+    #
+    # Vectorised: a point is an apex of ``z`` when it equals the maximum of the
+    # window ``[i - order, i + order]``. Doing this with a sliding-window
+    # maximum is O(n); the obvious nested loop over every index is O(n * order)
+    # in Python and took minutes per file on the 16 000-point traces, which is
+    # why the sweep never finished.
+    z_plus = y
+    z_minus = -y
+    best: int | None = None
+    best_sign = 1.0
+    best_prom = 0.0
+    for sign, z in ((1.0, z_plus), (-1.0, z_minus)):
+        apex_mask = _local_maxima_mask(z, order)
+        for i in np.flatnonzero(apex_mask):
+            if i < order or i >= n - order:
+                continue
+            lo = max(0, i - hw)
+            hi = min(n, i + hw + 1)
+            wl = z[lo:i]
+            wr = z[i + 1 : hi]
+            if wl.size == 0 or wr.size == 0:
+                continue
+            # At an apex of z, prominence is how far it stands above the higher
+            # of its two shoulders: the standard topographic definition.
+            prom = float(z[i] - max(np.min(wl), np.min(wr)))
+            if prom > best_prom:
+                best_prom = prom
+                best = i
+                best_sign = sign
+    if best is None or best_prom <= 0:
+        return None
+    rough = best
+
+    # A melting endotherm returns to its own baseline; a glass transition steps
+    # to a new level and stays there. Amplitude cannot separate the two -- on
+    # the figshare set the amorphous PS produces a LARGER prominence (0.378 of
+    # the range) than the genuinely melting PET (0.165), so any threshold on
+    # prominence reports a melting peak for a polymer that cannot melt.
+    #
+    # The discriminating quantity is local: measure the level just before the
+    # event and just after it, on the same window used for the prominence. A
+    # peak ends where it began; a step does not. Measured that way the same set
+    # separates -- see the tests, which pin real melting traces as accepted and
+    # amorphous ones as rejected.
+    z = best_sign * y
+    lo = max(0, rough - hw)
+    hi = min(n, rough + hw + 1)
+    edge = max(1, hw // 5)
+    before = float(np.median(z[lo : lo + edge])) if lo + edge <= rough else None
+    after = float(np.median(z[hi - edge : hi])) if hi - edge > rough else None
+    if before is not None and after is not None and full_range > 0:
+        # ``z`` is oriented so the candidate is a maximum: a pure peak comes
+        # back down to ``before``, so the level *after* the event sits below
+        # the level *before* it by no more than the peak's own return.
+        # A step keeps climbing, so ``after`` is at or above ``before``.
+        return_signal = (z[rough] - after) / max(z[rough] - before, 1e-12)
+        if return_signal < _MIN_PEAK_RETURN:
+            return None
+
+    # The candidate must be a real excursion in its own trace, not the gentle
+    # undulation of a featureless scan.
+    if best_prom / full_range < _MIN_PEAK_FRACTION:
+        return None
+    # An apex at an end of the scan is not a transition, it is the boundary.
+    if rough <= order or rough >= n - order - 1:
+        return None
+
+    # Refine against a baseline fitted away from the transition.
+    #
+    # The refinement is confined to the neighbourhood of the shape-search
+    # candidate, and this is the whole point of it. Searching the entire trace
+    # for the largest absolute excess -- ``nanargmax(abs(excess))`` -- makes the
+    # answer depend on where the *fitted baseline* is furthest from the curve,
+    # which is typically an end of the scan where the baseline is extrapolated.
+    # On the figshare PET2-AR trace that returned index 0, so the reported Tm
+    # went back to ``-0.06`` (the first sample of the ramp) even though the
+    # shape search had already found the real endotherm at 254.0 C. That is the
+    # original bug re-entering by a second door.
     baseline = _local_baseline(T, y, rough)
     excess = y - baseline
-    if np.all(np.isnan(excess)):
-        return rough
-    refined = int(np.nanargmax(excess))
-    # The refinement is only trusted when it moves the peak onto a region the
-    # baseline actually excluded; otherwise keep the rough estimate.
-    candidate = refined if abs(excess[refined]) >= abs(excess[rough]) else rough
-
-    # Significance. An amorphous polymer has no melting endotherm at all, but
-    # the chord residual on a monotonic trace is positive over most of the
-    # range, so some index always wins the argmax. On the figshare 24462004
-    # polystyrene trace (Tg 105 C, no melting) that produced a "melting peak"
-    # at 109.7 C whose excess was 8 % of the trace's own excursion -- and,
-    # worse, it then defined the melt_range handed to the glass-transition
-    # search, which excluded the real Tg region and left the sample with no
-    # glass transition reported.
-    #
-    # A real melting endotherm is a large excursion in its own trace. Requiring
-    # a fixed fraction of the full range separates the two: measured on this
-    # set the true melting peaks are 40-95 % of the range, while the amorphous
-    # false positives sit under 10 %.
-    full_range = float(np.nanmax(y) - np.nanmin(y))
-    peak_excess = abs(float(excess[candidate]))
-    if full_range > 0 and peak_excess / full_range < _MIN_PEAK_FRACTION:
-        return None
+    search_lo = max(0, rough - hw)
+    search_hi = min(n, rough + hw + 1)
+    candidate = rough
+    peak_excess = best_prom
+    if not np.all(np.isnan(excess)):
+        local = np.abs(excess[search_lo:search_hi])
+        if local.size:
+            refined = search_lo + int(np.nanargmax(local))
+            if abs(float(excess[refined])) >= abs(float(excess[rough])):
+                candidate = refined
+                peak_excess = abs(float(excess[candidate]))
 
     # Shape test on the refined candidate. A melting endotherm is a peak: the
     # excess rises into it and falls away after. The switching transient at the
