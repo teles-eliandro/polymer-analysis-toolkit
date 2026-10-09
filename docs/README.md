@@ -590,6 +590,71 @@ So the honest summary is that this defect is **half fixed**: the analysis no
 longer states something physically impossible, and it still does not state the
 right value. Those are different claims, and only the first is supported.
 
+### 3.9 A file the analysis could not accept at all
+
+Sections 3.1–3.8 concern analyses that ran and returned something wrong. This
+one concerns files that could not be run: the trace modules took JSON with two
+clean lists in the right units, and a researcher holding the instrument's own
+export had nothing to put in them.
+
+A NETZSCH DSC 204F1 Phoenix export shows why that is a real gap rather than an
+inconvenience. The file is:
+
+```
+#SEPARATOR:SEMICOLON
+#DECIMAL:POINT
+#EXO:-1
+#RANGE:-30°C/10,0(K/min)/200°C
+#SAMPLE MASS /mg:4.98
+#SAMPLE:1-90
+##Temp./°C;Time/min;DSC/(mW/mg);Sensit./(uV/mW)
+  9.33910; 91.00083;-8.719357e-02;3.42446
+```
+
+Four columns, and the **second is time, not the signal**. The signal is in
+mW/mg, not W/g. The delimiter and the decimal mark are declared in the header.
+The degree sign is latin-1, so `numpy.loadtxt` raises `UnicodeDecodeError` on
+the file outright. `#EXO:-1` gives the sign convention. And the heating rate —
+without which an enthalpy cannot be expressed in J/g — is inside `#RANGE`, as
+`10,0(K/min)` with a **decimal comma**.
+
+Reading this file as "first column x, second column y" does not fail. It
+analyses the time axis, which runs from 91 to 114, as though it were a heat
+flow in W/g, and returns numbers. The column's own amplitude is the give-away:
+23 units of range against less than 2 for the real signal.
+
+The tool now reads the file. It identifies each column's role from its label
+and unit, converts to the canonical unit, and surfaces the header's metadata —
+sample name, mass, heating rate, exothermic direction. Where a conversion
+cannot be made honestly, it says so; an absolute signal in mW with no sample
+mass on file is refused rather than divided by a guess. Two shapes of failure
+that a naive reader produces were caught by the tests rather than by review:
+
+* A column matcher that accepted short substrings (`"s"` for seconds) matched
+  `DSC/(mW/mg)` and `Sensit./(uV/mW)` as *time*, because both contain an `s`.
+  The y-axis came from the wrong column and nothing indicated it. Every token
+  is now three characters or more, on the principle that in an instrument
+  header a short abbreviation is always ambiguous, and not recognising is
+  better than recognising wrongly.
+* The cold-crystallisation finder from §3.8 and the melting-ramp detector both
+  needed the sample density stated. A file sampling one point per degree cannot
+  support a glass transition, because the step is narrower than the spacing.
+
+That last point produced the decision worth recording. On the real LDPE file
+the analysis returns Tm = 105.3 °C, inside the 105–115 °C range for LDPE, and a
+crystallinity of 39.6 %. It also *wanted* to return Tg = 22.9 °C, which is
+nonsense: LDPE's glass transition is near −110 °C and the scan begins at
+−30 °C, so the transition is not in the file at all. The value was baseline
+curvature from a 1-point-per-degree trace.
+
+The first version of the endpoint returned that number and a warning beside it.
+That is the failure mode this project keeps rediscovering: **a number travels,
+a warning does not.** A caller reading `Tg` from the JSON sees a value; the
+prose in a `notes` array is not part of the field. The field is now omitted
+with the reason in `refusals`, which is the same rule already applied to a
+crystallinity with no reference enthalpy. The rule generalises: when the tool
+states that a quantity cannot be determined, it must not also report it.
+
 
 ---
 
@@ -731,7 +796,7 @@ trace and a negative mass are all accepted without complaint by arithmetic that
 is otherwise correct; and verify against data the implementation did not
 generate.
 
-The verification described here found seven defects that no amount of internally
+The verification described here found eight defects that no amount of internally
 consistent testing would have surfaced, established that the three
 input-checking failures share a single cause, and leaves seven questions open.
 Both outcomes are the point of doing it.
@@ -779,6 +844,11 @@ is what keeps a missing reference from being reported as a disagreement.
     of events in a DSC trace) are the basis of §3.8. Slide 11 distinguishes the
     first-order melting transition from the second-order glass transition, and
     slide 55 gives the ASTM D3418 midpoint construction this tool implements.
+12. LDPE DSC trace, NETZSCH DSC 204F1 Phoenix export. Used as the instrument-
+    file fixture in `backend/tests/fixtures/netzsch_dsc_ldpe.txt`. It is the
+    case that motivates §3.9: four columns whose second is time, a declared
+    delimiter and decimal mark, a latin-1 degree sign, `#EXO:-1` and the
+    heating rate in `#RANGE`.
 
 ## Licence
 
