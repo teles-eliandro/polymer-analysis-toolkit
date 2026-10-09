@@ -44,11 +44,44 @@ const IMPORT_EXTENSIONS = [
   '.prn',
 ];
 
+/**
+ * Extensions the thermal importer attempts.
+ *
+ * Wider than the molar-mass list because the thermal reader handles the
+ * instrument's own binary container as well as its text export. A `.tri` is
+ * what a TA Instruments calorimeter actually writes; the text export is a
+ * secondary artefact produced on request, so refusing the container means
+ * refusing the file the researcher has by default.
+ *
+ * The vendor's own containers are named: `.tri` is the Trios export, and
+ * `.ngb-sd7` is the NETZSCH container that the Proteus text export is
+ * produced from. The latter is not decoded yet, and the server says so
+ * rather than mis-parsing it -- but listing it here means the refusal comes
+ * from the reader, which can explain the format, instead of from an
+ * extension check that can only say "unsupported".
+ */
+const THERMAL_EXTENSIONS = [
+  ...IMPORT_EXTENSIONS,
+  '.tri',
+  '.ngb',
+  '.ngb-sd7',
+  '.sd7',
+];
+
+export { THERMAL_EXTENSIONS, IMPORT_EXTENSIONS, TEXT_EXTENSIONS };
+
 /** Refuse anything large enough to freeze the tab while parsing. */
 const MAX_BYTES = 8 * 1024 * 1024;
 
-/** Server uploads never touch the tab's memory, so allow a larger file. */
-const MAX_UPLOAD_BYTES = 32 * 1024 * 1024;
+/**
+ * Server uploads never touch the tab's memory, so the only real limit is the
+ * server's own body size. This has to clear the vendor containers: a real
+ * TA Instruments `.tri` from the calibration set runs 25-34 MB, so a 32 MB
+ * ceiling refused the larger runs of a format the reader handles. Both
+ * numbers are stated in the error the user sees, so raising this does not
+ * silently widen what is accepted.
+ */
+const MAX_UPLOAD_BYTES = 64 * 1024 * 1024;
 
 function extensionOf(name) {
   const dot = name.lastIndexOf('.');
@@ -62,6 +95,18 @@ export default function FileDrop({
   label,
   hint,
   accept,
+  /**
+   * Extensions the caller knows its server reader handles.
+   *
+   * The component used to decide this itself from the callback mode, which
+   * meant the panel's `accept` attribute and the check actually applied could
+   * disagree. They did: the thermal panel advertised `.tri` in the file
+   * picker while this component's upload list did not contain it, so the file
+   * was refused with "unsupported extension" after the user had been told to
+   * choose it. Letting the caller pass the list makes the advertised set and
+   * the enforced set the same one.
+   */
+  allowedExtensions,
 }) {
   const { t } = useI18n();
   const inputRef = useRef(null);
@@ -70,7 +115,12 @@ export default function FileDrop({
 
   // Upload mode: the server importer does the format detection.
   const uploadMode = !onText && typeof onFile === 'function';
-  const allowed = uploadMode ? IMPORT_EXTENSIONS : TEXT_EXTENSIONS;
+  const allowed =
+    allowedExtensions && allowedExtensions.length > 0
+      ? allowedExtensions
+      : uploadMode
+        ? IMPORT_EXTENSIONS
+        : TEXT_EXTENSIONS;
   const maxBytes = uploadMode ? MAX_UPLOAD_BYTES : MAX_BYTES;
   const resolvedAccept = accept || allowed.join(',');
 
@@ -79,7 +129,9 @@ export default function FileDrop({
     onError?.('');
     const ext = extensionOf(file.name);
     if (!allowed.includes(ext)) {
-      onError?.(t('file.unsupported', { ext: ext || file.name }));
+      // A recusa nomeia o que É aceito: dizer só "não suportado" obriga quem
+      // tentou a adivinhar quais formatos o leitor conhece.
+      onError?.(t('file.unsupported', { ext: ext || file.name, list: allowed.join(', ') }));
       return;
     }
     if (file.size > maxBytes) {

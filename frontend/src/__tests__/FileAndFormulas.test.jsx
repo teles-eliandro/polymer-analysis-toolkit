@@ -15,7 +15,7 @@ import path from 'path';
 
 import { I18nProvider } from '../i18n/I18nContext';
 import ThermalPanel from '../components/ThermalPanel';
-import FileDrop from '../components/FileDrop';
+import FileDrop, { THERMAL_EXTENSIONS } from '../components/FileDrop';
 import { Formula, FormulaDisclosure } from '../components/Formula';
 
 jest.mock('../services/api', () => ({
@@ -60,6 +60,50 @@ describe('FileDrop', () => {
     const messages = onError.mock.calls.map((c) => c[0]).filter(Boolean);
     expect(messages.some((m) => m.includes('.raw'))).toBe(true);
     expect(onText).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The thermal panel advertises .tri, so the drop zone must deliver it.
+   *
+   * It did not. FileDrop decided its own allowed list from the callback mode
+   * and that list had no `.tri`, so the file was refused with "unsupported
+   * extension" -- after the panel had told the user to pick one. The
+   * extension check and the advertised set are now the same value passed in,
+   * and this test pins that a `.tri` reaches the server callback.
+   */
+  test('delivers a .tri upload to the server callback', async () => {
+    const onFile = jest.fn();
+    const onError = jest.fn();
+    renderWithI18n(
+      <FileDrop onFile={onFile} onError={onError} allowedExtensions={THERMAL_EXTENSIONS} />,
+    );
+
+    const input = document.querySelector('input[type="file"]');
+    const file = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], 'PS1-AR.tri', {
+      type: 'application/octet-stream',
+    });
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() => expect(onFile).toHaveBeenCalled());
+    expect(onFile.mock.calls[0][0].name).toBe('PS1-AR.tri');
+    expect(onError.mock.calls.map((c) => c[0]).filter(Boolean)).toHaveLength(0);
+  });
+
+  test('refuses .tri when the caller did not declare its reader handles it', async () => {
+    const onFile = jest.fn();
+    const onError = jest.fn();
+    renderWithI18n(<FileDrop onFile={onFile} onError={onError} />);
+
+    const input = document.querySelector('input[type="file"]');
+    const file = new File([new Uint8Array([1, 2, 3])], 'run.tri', {
+      type: 'application/octet-stream',
+    });
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() => expect(onError).toHaveBeenCalled());
+    const messages = onError.mock.calls.map((c) => c[0]).filter(Boolean);
+    expect(messages.some((m) => m.includes('.tri'))).toBe(true);
+    expect(onFile).not.toHaveBeenCalled();
   });
 
   test('upload mode hands the File object over without reading it', async () => {

@@ -400,9 +400,9 @@ const MESSAGES = {
     'file.accepted': 'Accepted: {list}',
     'file.clear': 'Remove file',
     'file.unsupported':
-      'The extension {ext} is not a text data format this tool can read. Export the trace as CSV or TXT.',
+      'The extension {ext} is not a format this reader accepts. Accepted here: {list}.',
     'file.tooLarge':
-      'The file is larger than {mb} MB and will not be parsed in the browser. Export a coarser trace.',
+      'The file is larger than {mb} MB and will not be sent. Export a coarser trace.',
     'file.readFailed': 'The file {name} could not be read.',
     'file.loaded': 'Loaded {name}: {n} points.',
     'file.noPoints':

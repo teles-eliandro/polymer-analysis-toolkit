@@ -13,7 +13,7 @@ import {
   ResultsBundleButton,
   parseTwoColumns,
 } from './ui';
-import FileDrop from './FileDrop';
+import FileDrop, { THERMAL_EXTENSIONS } from './FileDrop';
 import { Formula, FormulaDisclosure } from './Formula';
 import { ComparisonPanel } from './Comparison';
 
@@ -222,7 +222,7 @@ export default function ThermalPanel() {
         <FileDrop
           onFile={loadFile}
           onError={setError}
-          accept=".txt,.csv,.tsv,.dat,.asc,.prn,.tri"
+          allowedExtensions={THERMAL_EXTENSIONS}
           hint={t('file.accepted', { list: 'CSV, TSV, TXT, DAT, ASC, TRI' })}
         />
         {fileNote ? (
