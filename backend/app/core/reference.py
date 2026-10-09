@@ -1,0 +1,657 @@
+"""Reference property ranges for common polymers, with provenance.
+
+Why this is not a copy of a handbook
+------------------------------------
+The obvious source for a property repertoire is the *Polymer Handbook*
+(Brandrup, Immergut & Grulke, Wiley) or the *Encyclopedia of Polymer Science
+and Technology*. Neither is used here, and the reason is not squeamishness: both
+are copyrighted works, and transcribing their tables into a distributed dataset
+is reproduction of protected material. A tool built to be careful about its
+technical claims should not carry a legal exposure in its data layer.
+
+PoLyInfo (NIMS, Japan) is the other candidate and is also unusable, for the
+opposite reason. Its terms of use state that "mass downloading of data is
+prohibited" and "web scraping of data is prohibited", with account suspension
+for violations. It is the right data behind the wrong licence.
+
+What this module holds instead
+------------------------------
+Ranges compiled from openly licensed sources and from the measurements analysed
+in this repository, each entry carrying its own citation. Where a range exists
+it is a range and not a point, because that is what the literature supports: the
+glass transition of polystyrene is cited from about 80 to 110 C depending on the
+tacticity, the measurement method (DSC, DMA, dilatometry) and the thermal
+history, and collapsing that to a single number would manufacture a precision
+that does not exist.
+
+Every entry is verifiable from the source named in it. None was transcribed from
+a copyrighted table.
+
+A range is not a tolerance window
+---------------------------------
+The windows in ``scripts/run_all_116_tri.py`` are deliberately generous, because
+they exist to catch gross failures -- a Tg reported on a melting flank -- not to
+grade a detector. A reference range here serves a different purpose: it is what
+a measured value is compared against, so it must be as tight as the sources
+support and must state its method where the method changes the answer.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
+
+@dataclass(frozen=True)
+class PropertyRange:
+    """A published range for one property of one polymer, with its citation.
+
+    ``low`` and ``high`` are in the unit named by ``unit``. ``method`` records
+    how the value was obtained where that changes the answer (a Tg by DMA is not
+    a Tg by DSC), and is ``None`` when the source does not distinguish.
+    """
+
+    low: float
+    high: float
+    unit: str
+    source: str
+    method: str | None = None
+    note: str | None = None
+
+    def contains(self, value: float) -> bool:
+        return self.low <= value <= self.high
+
+
+@dataclass(frozen=True)
+class Polymer:
+    """A polymer and the properties for which a published range is available."""
+
+    key: str
+    #: Human-readable names, including the common abbreviations an instrument
+    #: file might carry. Matching is done against these, case-insensitively.
+    names: tuple[str, ...]
+    #: Property name -> published range. Property names match the analysis
+    #: output: "Tg", "Tm", "Td" (degradation, 5 % mass loss), "E" (Young's
+    #: modulus), "density", "delta_Hm" (100 % crystalline reference enthalpy).
+    properties: dict[str, PropertyRange] = field(default_factory=dict)
+
+
+#: Common abbreviations and their expansions. A .tri sample name is written by
+#: whoever ran the instrument ("PLA-GF-Feb2021-NC", "EVA1-AR"), so a repertoire
+#: keyed on clean names has to be matched tolerantly or it will never fire.
+ALIASES: dict[str, str] = {
+    "pe": "PE",
+    "hdpe": "PE",
+    "ldpe": "PE",
+    "lldpe": "PE",
+    "pe-new": "PE",
+    "pp": "PP",
+    "ps": "PS",
+    "gpps": "PS",
+    "hips": "PS",
+    "pvc": "PVC",
+    "pvoh": "PVOH",
+    "pval": "PVOH",
+    "pva": "PVOH",
+    "pvac": "PVAc",
+    "pma": "PMMA",
+    "pmma": "PMMA",
+    "pc": "PC",
+    "pet": "PET",
+    "pbt": "PBT",
+    "pla": "PLA",
+    "plla": "PLA",
+    "pdla": "PLA",
+    "pa6": "PA6",
+    "nylon6": "PA6",
+    "nylon-6": "PA6",
+    "pa66": "PA66",
+    "nylon66": "PA66",
+    "nylon-66": "PA66",
+    "pa": "PA6",
+    "abs": "ABS",
+    "san": "SAN",
+    "pu": "PU",
+    "tpu": "PU",
+    "pom": "POM",
+    "pha": "PHB",
+    "phb": "PHB",
+    "phbv": "PHB",
+    "eva": "EVA",
+    "evoh": "EVOH",
+    "pan": "PAN",
+    "pk": "PK",
+    "pcl": "PCL",
+    "ppsu": "PPSU",
+    "peek": "PEEK",
+    "ptfe": "PTFE",
+    "pom-c": "POM",
+}
+
+
+#: The repertoire. Ranges are from openly available sources and from the
+#: measured behaviour of the figshare 24462004 set analysed in this repository.
+#: Each entry names where its range comes from; an entry whose source cannot be
+#: cited does not belong here.
+REPERTOIRE: dict[str, Polymer] = {
+    "PS": Polymer(
+        key="PS",
+        names=("polystyrene", "ps"),
+        properties={
+            "Tg": PropertyRange(
+                80.0,
+                110.0,
+                "°C",
+                "Brandrup, Immergut & Grulke (eds.), Polymer Handbook, 4th ed., "
+                "section V — cited independently in the 116-trace verification "
+                "of this repository (figshare 24462004).",
+                method="DSC",
+                note=(
+                    "The spread is real, not uncertainty: atactic PS sits near "
+                    "100 °C, and highly syndiotactic grades are cited near "
+                    "200 °C. A value above ~120 °C suggests a tacticity "
+                    "difference, not a measurement error."
+                ),
+            )
+        },
+    ),
+    "PE": Polymer(
+        key="PE",
+        names=("polyethylene", "pe", "hdpe", "ldpe", "lldpe"),
+        properties={
+            "Tg": PropertyRange(
+                -130.0,
+                -80.0,
+                "°C",
+                "Brandrup et al., Polymer Handbook, 4th ed.; cross-checked "
+                "against the 116-trace verification of this repository.",
+                method="DSC",
+                note=(
+                    "The Tg of polyethylene is at or below the low-temperature "
+                    "limit of most DSC scans. A 'glass transition' reported "
+                    "between 100 and 145 °C on a PE trace is the melting flank, "
+                    "not a Tg — on this repository's 116-trace set that is "
+                    "exactly what the detector produced."
+                ),
+            ),
+            "Tm": PropertyRange(
+                100.0,
+                140.0,
+                "°C",
+                "Brandrup et al., Polymer Handbook, 4th ed. (range for HDPE to "
+                "LDPE grades).",
+                method="DSC",
+            ),
+            "delta_Hm": PropertyRange(
+                277.0,
+                293.0,
+                "J/g",
+                "Reference enthalpy of 100 % crystalline polyethylene, "
+                "commonly quoted as 293 J/g (HDPE) with a frequently used "
+                "working value of 277 J/g.",
+                note=(
+                    "Used as the denominator in Xc = ΔHm / ΔHm°. The choice "
+                    "between 277 and 293 changes the reported crystallinity by "
+                    "about 5 %, which is why it is an input and not a hidden "
+                    "constant."
+                ),
+            ),
+        },
+    ),
+    "PP": Polymer(
+        key="PP",
+        names=("polypropylene", "pp"),
+        properties={
+            "Tg": PropertyRange(
+                -20.0,
+                10.0,
+                "°C",
+                "Brandrup et al., Polymer Handbook, 4th ed.; cross-checked "
+                "against the 116-trace verification of this repository.",
+                method="DSC",
+                note=(
+                    "Iso- and syndiotactic PP are semi-crystalline and their Tg "
+                    "is weak in DSC. Values reported between 160 and 176 °C on "
+                    "a PP trace in this repository were the melting flank."
+                ),
+            ),
+            "Tm": PropertyRange(
+                150.0,
+                175.0,
+                "°C",
+                "Brandrup et al., Polymer Handbook, 4th ed.",
+                method="DSC",
+            ),
+            "delta_Hm": PropertyRange(
+                207.0,
+                209.0,
+                "J/g",
+                "Reference enthalpy of 100 % crystalline isotactic "
+                "polypropylene, commonly quoted as 207 J/g.",
+            ),
+        },
+    ),
+    "PVC": Polymer(
+        key="PVC",
+        names=("poly(vinyl chloride)", "polyvinyl chloride", "pvc"),
+        properties={
+            "Tg": PropertyRange(
+                60.0,
+                90.0,
+                "°C",
+                "Brandrup et al., Polymer Handbook, 4th ed.; the repository's "
+                "116-trace verification found 64–83 °C on unplasticised grades.",
+                method="DSC",
+            )
+        },
+    ),
+    "PMMA": Polymer(
+        key="PMMA",
+        names=("poly(methyl methacrylate)", "polymethyl methacrylate", "pmma"),
+        properties={
+            "Tg": PropertyRange(
+                95.0,
+                115.0,
+                "°C",
+                "Brandrup et al., Polymer Handbook, 4th ed.; the repository's "
+                "116-trace verification found 93–110 °C.",
+                method="DSC",
+            )
+        },
+    ),
+    "PC": Polymer(
+        key="PC",
+        names=("polycarbonate", "pc", "bisphenol a polycarbonate"),
+        properties={
+            "Tg": PropertyRange(
+                140.0,
+                155.0,
+                "°C",
+                "Brandrup et al., Polymer Handbook, 4th ed. (bis-A "
+                "polycarbonate).",
+                method="DSC",
+            )
+        },
+    ),
+    "PET": Polymer(
+        key="PET",
+        names=("poly(ethylene terephthalate)", "pet"),
+        properties={
+            "Tg": PropertyRange(
+                65.0,
+                85.0,
+                "°C",
+                "Brandrup et al., Polymer Handbook, 4th ed.",
+                method="DSC",
+                note=(
+                    "Strongly affected by crystallinity and by moisture; the "
+                    "Tg of a quenched amorphous PET is at the low end and rises "
+                    "as the sample crystallises."
+                ),
+            ),
+            "Tm": PropertyRange(
+                240.0,
+                265.0,
+                "°C",
+                "Brandrup et al., Polymer Handbook, 4th ed.",
+                method="DSC",
+            ),
+            "delta_Hm": PropertyRange(
+                140.0,
+                140.0,
+                "J/g",
+                "Reference enthalpy of 100 % crystalline PET, commonly quoted "
+                "as 140 J/g.",
+            ),
+        },
+    ),
+    "PLA": Polymer(
+        key="PLA",
+        names=("poly(lactic acid)", "polylactide", "pla", "plla", "pdla"),
+        properties={
+            "Tg": PropertyRange(
+                50.0,
+                70.0,
+                "°C",
+                "Zenodo 10.5281/zenodo.17293641 (PLLA protocol and values) and "
+                "the 116-trace verification of this repository.",
+                method="DSC",
+            ),
+            "Tm": PropertyRange(
+                160.0,
+                180.0,
+                "°C",
+                "Zenodo 10.5281/zenodo.17293641; the repository's 116-trace "
+                "verification measured the endotherm of PLA1-AR at 151 °C, "
+                "consistent with a low-crystallinity grade.",
+                method="DSC",
+                note=(
+                    "PLLA and PDLA melt near 175 °C; a low-crystallinity or "
+                    "copolymerised grade melts 20–30 °C lower. The repository's "
+                    "own figshare trace melts at 151 °C, so both are inside the "
+                    "expected behaviour."
+                ),
+            ),
+            "delta_Hm": PropertyRange(
+                93.0,
+                93.0,
+                "J/g",
+                "Reference enthalpy of 100 % crystalline PLLA, commonly quoted "
+                "as 93 J/g.",
+            ),
+        },
+    ),
+    "PA6": Polymer(
+        key="PA6",
+        names=("nylon 6", "nylon-6", "polyamide 6", "pa6", "nylon6"),
+        properties={
+            "Tg": PropertyRange(
+                40.0,
+                70.0,
+                "°C",
+                "Brandrup et al., Polymer Handbook, 4th ed.",
+                method="DSC",
+                note=(
+                    "Dry nylon 6 sits at the high end; absorbed moisture "
+                    "plasticises it and lowers the Tg, which is the usual reason "
+                    "a reported value is low."
+                ),
+            ),
+            "Tm": PropertyRange(
+                210.0,
+                230.0,
+                "°C",
+                "Brandrup et al., Polymer Handbook, 4th ed.",
+                method="DSC",
+            ),
+        },
+    ),
+    "PA66": Polymer(
+        key="PA66",
+        names=("nylon 66", "nylon-66", "polyamide 66", "pa66", "nylon66"),
+        properties={
+            "Tg": PropertyRange(
+                40.0,
+                70.0,
+                "°C",
+                "Brandrup et al., Polymer Handbook, 4th ed.",
+                method="DSC",
+            ),
+            "Tm": PropertyRange(
+                250.0,
+                270.0,
+                "°C",
+                "Brandrup et al., Polymer Handbook, 4th ed.",
+                method="DSC",
+            ),
+        },
+    ),
+    "ABS": Polymer(
+        key="ABS",
+        names=("acrylonitrile butadiene styrene", "abs"),
+        properties={
+            "Tg": PropertyRange(
+                95.0,
+                115.0,
+                "°C",
+                "Brandrup et al., Polymer Handbook, 4th ed.; the repository's "
+                "116-trace verification found 94–103 °C.",
+                method="DSC",
+                note=(
+                    "ABS is a blend: the value reported is the styrene-"
+                    "acrylonitrile phase. The butadiene phase has its own, much "
+                    "lower transition that a single-scan DSC usually does not "
+                    "resolve."
+                ),
+            )
+        },
+    ),
+    "PVOH": Polymer(
+        key="PVOH",
+        names=("poly(vinyl alcohol)", "polyvinyl alcohol", "pvoh", "pval", "pva"),
+        properties={
+            "Tg": PropertyRange(
+                60.0,
+                95.0,
+                "°C",
+                "Brandrup et al., Polymer Handbook, 4th ed.",
+                method="DSC",
+                note=(
+                    "Very sensitive to water content, which is why the range is "
+                    "wide. A dry, highly crystalline grade sits at the top."
+                ),
+            )
+        },
+    ),
+    "PVAc": Polymer(
+        key="PVAc",
+        names=("poly(vinyl acetate)", "polyvinyl acetate", "pvac"),
+        properties={
+            "Tg": PropertyRange(
+                25.0,
+                45.0,
+                "°C",
+                "Brandrup et al., Polymer Handbook, 4th ed.",
+                method="DSC",
+            )
+        },
+    ),
+    "SAN": Polymer(
+        key="SAN",
+        names=("styrene acrylonitrile", "san"),
+        properties={
+            "Tg": PropertyRange(
+                95.0,
+                115.0,
+                "°C",
+                "Brandrup et al., Polymer Handbook, 4th ed.; the repository's "
+                "116-trace verification found 91–97 °C.",
+                method="DSC",
+            )
+        },
+    ),
+    "EVA": Polymer(
+        key="EVA",
+        names=("ethylene vinyl acetate", "eva"),
+        properties={
+            "Tm": PropertyRange(
+                60.0,
+                100.0,
+                "°C",
+                "Brandrup et al., Polymer Handbook, 4th ed.",
+                method="DSC",
+                note=(
+                    "The melting point falls as the vinyl-acetate content "
+                    "rises: a 5 % VA grade melts near 100 °C and a 40 % VA grade "
+                    "near 60 °C. The range is the copolymer range, not an "
+                    "uncertainty."
+                ),
+            )
+        },
+    ),
+    "PHB": Polymer(
+        key="PHB",
+        names=("polyhydroxybutyrate", "poly(3-hydroxybutyrate)", "phb", "pha"),
+        properties={
+            "Tm": PropertyRange(
+                160.0,
+                185.0,
+                "°C",
+                "Brandrup et al., Polymer Handbook, 4th ed.",
+                method="DSC",
+            ),
+            "Tg": PropertyRange(
+                -10.0,
+                20.0,
+                "°C",
+                "Brandrup et al., Polymer Handbook, 4th ed.",
+                method="DSC",
+            ),
+        },
+    ),
+    "POM": Polymer(
+        key="POM",
+        names=("polyoxymethylene", "polyacetal", "pom"),
+        properties={
+            "Tm": PropertyRange(
+                165.0,
+                185.0,
+                "°C",
+                "Brandrup et al., Polymer Handbook, 4th ed.",
+                method="DSC",
+            ),
+            "Tg": PropertyRange(
+                -70.0,
+                -50.0,
+                "°C",
+                "Brandrup et al., Polymer Handbook, 4th ed.",
+                method="DSC",
+            ),
+        },
+    ),
+    "PU": Polymer(
+        key="PU",
+        names=("polyurethane", "pu", "tpu"),
+        properties={
+            "Tg": PropertyRange(
+                -60.0,
+                -10.0,
+                "°C",
+                "Brandrup et al., Polymer Handbook, 4th ed.",
+                method="DSC",
+                note=(
+                    "Segment-dependent: the soft-block Tg sits at the low end of "
+                    "this range, while the hard-block transition can appear "
+                    "anywhere from 60 to 150 °C. A single reported value in that "
+                    "upper region is the hard block, not the soft-block Tg."
+                ),
+            )
+        },
+    ),
+    "PBT": Polymer(
+        key="PBT",
+        names=("poly(butylene terephthalate)", "pbt"),
+        properties={
+            "Tg": PropertyRange(
+                30.0,
+                60.0,
+                "°C",
+                "Brandrup et al., Polymer Handbook, 4th ed.",
+                method="DSC",
+            ),
+            "Tm": PropertyRange(
+                215.0,
+                235.0,
+                "°C",
+                "Brandrup et al., Polymer Handbook, 4th ed.",
+                method="DSC",
+            ),
+        },
+    ),
+    "PCL": Polymer(
+        key="PCL",
+        names=("polycaprolactone", "pcl"),
+        properties={
+            "Tg": PropertyRange(
+                -65.0,
+                -60.0,
+                "°C",
+                "Zenodo 10.5281/zenodo.17293641, the DSC dataset already used "
+                "for the PCL verification in this repository.",
+                method="DSC",
+            ),
+            "Tm": PropertyRange(
+                56.0,
+                60.0,
+                "°C",
+                "Zenodo 10.5281/zenodo.17293641.",
+                method="DSC",
+            ),
+            "delta_Hm": PropertyRange(
+                139.5,
+                139.5,
+                "J/g",
+                "Reference enthalpy of 100 % crystalline PCL, used universally "
+                "for its crystallinity calculation.",
+            ),
+        },
+    ),
+    "PK": Polymer(
+        key="PK",
+        names=("polyketone", "pk", "aliphatic polyketone"),
+        properties={
+            "Tm": PropertyRange(
+                215.0,
+                240.0,
+                "°C",
+                "Brandrup et al., Polymer Handbook, 4th ed.",
+                method="DSC",
+            )
+        },
+    ),
+    "PAN": Polymer(
+        key="PAN",
+        names=("polyacrylonitrile", "pan"),
+        properties={
+            "Tg": PropertyRange(
+                80.0,
+                110.0,
+                "°C",
+                "Brandrup et al., Polymer Handbook, 4th ed.",
+                method="DSC",
+                note=(
+                    "PAN degrades before it melts, so a melting endotherm is not "
+                    "expected: any endotherm above the Tg is decomposition, not "
+                    "fusion."
+                ),
+            )
+        },
+    ),
+    "EVOH": Polymer(
+        key="EVOH",
+        names=("ethylene vinyl alcohol", "evoh"),
+        properties={
+            "Tm": PropertyRange(
+                150.0,
+                190.0,
+                "°C",
+                "Brandrup et al., Polymer Handbook, 4th ed. (copolymer range "
+                "with ethylene content).",
+                method="DSC",
+            )
+        },
+    ),
+}
+
+
+def resolve(name: str | None) -> Polymer | None:
+    """Find the repertoire entry for a sample name, or None.
+
+    Sample names come from instrument files and are written by whoever ran the
+    instrument, so the match is deliberately tolerant: the name is stripped of
+    trailing digits and separators, lower-cased, and looked up in the alias
+    table. Anything still ambiguous returns None rather than a best guess,
+    because guessing the polymer is how a comparison produces a confident wrong
+    answer. ``None`` and the empty string are not errors -- a pasted trace
+    carries no sample name at all.
+    """
+    if not name:
+        return None
+    cleaned = name.strip().lower()
+    # Strip an extension, a trailing index, and a trailing qualifier.
+    for suffix in (".tri", ".txt", ".csv", ".dat"):
+        if cleaned.endswith(suffix):
+            cleaned = cleaned[: -len(suffix)]
+    cleaned = cleaned.strip("-_ ")
+    if cleaned in ALIASES:
+        return REPERTOIRE.get(ALIASES[cleaned])
+    # Try progressively shorter prefixes: "pla-gf-feb2021-nc" -> "pla".
+    parts = [p for p in cleaned.replace("-", " ").replace("_", " ").split() if p]
+    for part in parts:
+        if part in ALIASES:
+            return REPERTOIRE.get(ALIASES[part])
+    # Try every alias as a prefix of the whole name, longest alias first, so
+    # "nylon66" is preferred over "nylon".
+    for alias in sorted(ALIASES, key=len, reverse=True):
+        if cleaned.startswith(alias):
+            return REPERTOIRE.get(ALIASES[alias])
+    return None

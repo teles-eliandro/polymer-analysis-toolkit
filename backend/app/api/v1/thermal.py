@@ -8,10 +8,12 @@ from app.api.v1.schemas import (
     DSCResult,
     DSCTraceInput,
     FieldClaim,
+    PropertyComparison,
     TGAResult,
     TGAStep,
     TGATraceInput,
 )
+from app.core.compare import compare_result
 from app.core.thermal import analyse_dsc, analyse_tga
 
 router = APIRouter(prefix="/thermal", tags=["Thermal Analysis"])
@@ -95,6 +97,12 @@ async def dsc_endpoint(payload: DSCTraceInput) -> DSCResult:
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    comparisons = compare_result(
+        payload.sample_name,
+        {"Tg": r.Tg, "Tm": r.Tm, "delta_Hm": r.delta_Hm},
+        claims=r.claims,
+    )
     return DSCResult(
         Tg=r.Tg,
         Tg_onset=r.Tg_onset,
@@ -119,4 +127,5 @@ async def dsc_endpoint(payload: DSCTraceInput) -> DSCResult:
             )
             for k, v in r.claims.items()
         },
+        comparisons=[PropertyComparison(**c.as_dict()) for c in comparisons],
     )

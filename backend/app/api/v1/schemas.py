@@ -180,6 +180,17 @@ class DSCResult(BaseModel):
             "number."
         ),
     )
+    comparisons: list[PropertyComparison] = Field(
+        default_factory=list,
+        description=(
+            "The measured values compared against published ranges, one entry "
+            "per comparable property, each carrying a tri-state verdict and the "
+            "citation of the range it used. Empty when the sample name was not "
+            "given or the polymer was not recognised -- both of which are "
+            "reported as 'not_comparable' entries rather than omitted, so the "
+            "client can say why."
+        ),
+    )
 
 
 class FieldClaim(BaseModel):
@@ -204,6 +215,34 @@ class FieldClaim(BaseModel):
     )
 
 
+class PropertyComparison(BaseModel):
+    """One measured value compared against its published range."""
+
+    property: str
+    verdict: str = Field(
+        ...,
+        description=(
+            "One of 'within', 'outside', or 'not_comparable'. The third is not "
+            "an error: it is returned when the polymer was not identified, when "
+            "the value is an unstable suggestion, when no published range "
+            "covers this property, or when the units differ. A two-state verdict "
+            "would report a detector failure as a finding about the sample."
+        ),
+    )
+    measured: float | None = None
+    unit: str | None = None
+    reference_low: float | None = None
+    reference_high: float | None = None
+    reference_unit: str | None = None
+    reference_source: str | None = None
+    reference_method: str | None = None
+    reference_note: str | None = None
+    reason: str | None = Field(
+        None, description="Why the comparison could not be made, when it could not."
+    )
+    polymer: str | None = Field(None, description="The polymer compared against.")
+
+
 class DSCTraceInput(BaseModel):
     temperature: list[float] = Field(..., min_length=3)
     heat_flow: list[float] = Field(..., min_length=3, description="Heat flow in W/g.")
@@ -219,6 +258,16 @@ class DSCTraceInput(BaseModel):
         ),
     )
     smooth_window: int = Field(11, ge=1, le=101)
+    sample_name: str | None = Field(
+        None,
+        description=(
+            "Name of the sample, used to identify the polymer for the "
+            "comparison against published ranges. When it is absent or the "
+            "polymer is not recognised, the comparison reports "
+            "'not_comparable' rather than guessing -- guessing the polymer is "
+            "how a comparison produces a confident wrong answer."
+        ),
+    )
 
 
 # --------------------------------------------------------------------------
