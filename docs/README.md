@@ -712,6 +712,52 @@ content rather than extension, the metadata recovery including the corrupted
 degree sign, the election of canonical channels over auxiliary ones, and the
 refusal of binary input. Backend suite at 369 passing.
 
+### 3.11 A reader that was correct and never called
+
+§3.9 built the instrument-file reader and §3.10 let it accept both formats. A
+user then uploaded a NETZSCH DSC export and reported that the tool would not
+show the two columns that matter — temperature in °C and heat flow in W/g —
+suspecting it was taking the first two columns and no more.
+
+The suspicion was exactly right, and the reader was not at fault. The file read
+correctly through the API: roles, units, metadata and the sparse-sampling
+warning all came back as designed. The panel, however, never called it. The
+thermal panel parsed the upload **in the browser** with a helper that strips
+the header and takes the first two numbers on each line:
+
+```js
+.filter((l) => !l.startsWith('#') && !l.startsWith('//'));   // header, discarded
+const a = toNum(parts[0]);   // column 1
+const b = toNum(parts[1]);   // column 2 — always
+```
+
+On this file the columns are `Temp./°C; Time/min; DSC/(mW/mg); Sensit./(uV/mW)`.
+The second is **time**. So the trace that reached the analysis was temperature
+against time, with the time axis read as a heat flow in W/g — the precise
+failure §3.9 was written to prevent, arriving through the one door that had not
+been repaired. Nothing failed: the box filled, the plot drew, the numbers came
+out, and all of them described the wrong quantity.
+
+The lesson is the narrowest one in this document and the most easily missed:
+**fixing the layer that reads the data does not fix the layer that calls it.**
+The tests passed because every test exercised the reader directly. No test
+asserted that the panel's file route reaches the reader at all, so the wire
+between them was untested while both of its ends were covered. Two frontend
+tests did exist for this route, and both asserted the old behaviour — that the
+panel rebuilds a two-column text from the first two numbers — which made a
+defect look like a specification.
+
+The file now goes to the server, which returns the resolved columns, and the
+panel displays what was decided: the axes, the sample, the mass and the heating
+rate, so a mis-read column is visible rather than implied by a plausible plot.
+The resolved axis labels are also written back into the trace box, because a
+pair of unnamed columns cannot be checked by anyone reading them later.
+
+On the reporting file (LDPE, 168 points, 10 K/min) the trace now reads
+`Temp./°C` against `DSC/(mW/mg)` and returns Tm = 107.4 °C, inside the
+105–115 °C window for LDPE, with ΔHm = 111.2 J/g. The previous route fed the
+analysis the time axis.
+
 
 ---
 
