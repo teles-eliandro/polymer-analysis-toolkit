@@ -1,0 +1,26 @@
+{
+  "sample_name": "PS-Pellet-280kDa-NC,1",
+  "mass_mg": 7.08,
+  "n_channels": 14,
+  "signal_names": [
+    "Time",
+    "Tzero Temperature",
+    "Reference Temperature",
+    "Cell Purge",
+    "Heater Temp",
+    "Power Delivered",
+    "Reference Junction Temperature",
+    "Flange Temperature",
+    "Temperature A",
+    "Temperature B",
+    "Temperature C",
+    "Heat Flow A",
+    "Heat Flow B",
+    "Heat Flow"
+  ],
+  "heating_rate_K_min": 10.0,
+  "roles": {
+    "temperature": "Tzero Temperature",
+    "heat_flow": "Heat Flow"
+  }
+}

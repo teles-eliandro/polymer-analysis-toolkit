@@ -71,17 +71,35 @@ class TraceImportError(ValueError):
 #: que reconhecer errado.
 COLUMN_ROLES: dict[str, tuple[str, ...]] = {
     "temperature": (
-        "temp", "temperature", "temperatur", "sample temp", "program temp",
-        "tsample", "tzero",
+        "temp",
+        "temperature",
+        "temperatur",
+        "sample temp",
+        "program temp",
+        "tsample",
+        "tzero",
     ),
     "time": ("time", "zeit", "minute", "second", "min)", "(min", "(s)", "/min"),
     "heat_flow": (
-        "dsc", "heat flow", "heatflow", "heat-flow", "fluxo de calor",
-        "heat flow rate", "calor",
+        "dsc",
+        "heat flow",
+        "heatflow",
+        "heat-flow",
+        "fluxo de calor",
+        "heat flow rate",
+        "calor",
     ),
     "mass": (
-        "mass", "weight", "tga", "masse", "massa", "mass percent",
-        "tga curve", "w (%)", "weight (%)", "mass (%)",
+        "mass",
+        "weight",
+        "tga",
+        "masse",
+        "massa",
+        "mass percent",
+        "tga curve",
+        "w (%)",
+        "weight (%)",
+        "mass (%)",
     ),
     "dtg": ("dtg", "derivative", "dm/dt", "rate of mass loss"),
     "stress": ("stress", "tensao", "tension", "sigma", "force"),
@@ -119,18 +137,18 @@ IGNORED_ROLES = frozenset({"sensitivity", "reference_temp", "purge", "time", "dt
 UNIT_TABLE: dict[str, dict[str, tuple[float | str | None, str]]] = {
     "heat_flow": {
         "w/g": (1.0, "W/g"),
-        "mw/mg": (1.0, "W/g"),          # numericamente idêntico: 1 mW/mg = 1 W/g
+        "mw/mg": (1.0, "W/g"),  # numericamente idêntico: 1 mW/mg = 1 W/g
         "w/mg": (1000.0, "W/g"),
         "uw/mg": (1e-3, "W/g"),
-        "mw": (None, "W/g"),            # absoluto: precisa da massa
+        "mw": (None, "W/g"),  # absoluto: precisa da massa
         "w": (None, "W/g"),
-        "j/g": (None, "W/g"),           # energia, não fluxo: recusar
+        "j/g": (None, "W/g"),  # energia, não fluxo: recusar
     },
     "mass": {
         "%": (1.0, "pct"),
         "pct": (1.0, "pct"),
         "percent": (1.0, "pct"),
-        "mg": (None, "pct"),            # absoluto: precisa da massa inicial
+        "mg": (None, "pct"),  # absoluto: precisa da massa inicial
         "g": (None, "pct"),
     },
     "temperature": {
@@ -154,14 +172,19 @@ UNIT_TABLE: dict[str, dict[str, tuple[float | str | None, str]]] = {
         "pct": (1.0, "pct"),
         "percent": (1.0, "pct"),
         "mm/mm": (100.0, "pct"),
-        "": (1.0, "pct"),               # sem unidade: assumir fração? não -- ver abaixo
+        "": (1.0, "pct"),  # sem unidade: assumir fração? não -- ver abaixo
     },
     "g_prime": {"pa": (1.0, "Pa"), "kpa": (1e3, "Pa"), "mpa": (1e6, "Pa")},
     "g_double_prime": {"pa": (1.0, "Pa"), "kpa": (1e3, "Pa"), "mpa": (1e6, "Pa")},
     "wavenumber": {"cm-1": (1.0, "cm-1"), "cm^-1": (1.0, "cm-1"), "cm⁻¹": (1.0, "cm-1")},
     "transmittance": {"%": (1.0, "pct"), "pct": (1.0, "pct")},
     "absorbance": {"au": (1.0, "au"), "": (1.0, "au"), "a.u.": (1.0, "au")},
-    "two_theta": {"deg": (1.0, "deg"), "°": (1.0, "deg"), "degrees": (1.0, "deg"), "2theta": (1.0, "deg")},
+    "two_theta": {
+        "deg": (1.0, "deg"),
+        "°": (1.0, "deg"),
+        "degrees": (1.0, "deg"),
+        "2theta": (1.0, "deg"),
+    },
 }
 
 
@@ -213,7 +236,10 @@ class TraceFile:
     @property
     def sample_mass_mg(self) -> float | None:
         for key in (
-            "sample mass /mg", "sample mass", "mass /mg", "size",
+            "sample mass /mg",
+            "sample mass",
+            "mass /mg",
+            "size",
             "sample weight /mg",
         ):
             if key in self.metadata:
@@ -272,7 +298,19 @@ def _decode(raw: bytes) -> str:
     escreve ``°`` como byte único, o que é UTF-8 inválido: decodificar como
     UTF-8 com ``errors="replace"`` produziria ``�`` no meio de ``°C`` e o
     rótulo da coluna de temperatura deixaria de casar.
+
+    Um conteúdo binário é recusado aqui em vez de seguir: latin-1 decodifica
+    *qualquer* byte, então sem esta guarda um PNG ou um contêiner proprietário
+    atravessava o parser de texto e saía como um ``TraceFile`` de colunas
+    inventadas -- a análise rodava sobre lixo sem que nada reclamasse.
     """
+    if _looks_binary(raw):
+        raise TraceImportError(
+            "o arquivo parece binário, não um export de texto delimitado. "
+            "Se for um formato proprietário do instrumento (ex.: .tri, .ngb-sd7), "
+            "exporte-o como texto/CSV, ou informe o formato para que o leitor "
+            "correto seja usado."
+        )
     for enc in ("utf-8-sig", "latin-1"):
         try:
             text = raw.decode(enc)
@@ -283,6 +321,23 @@ def _decode(raw: bytes) -> str:
         text = raw.decode("utf-8", errors="replace")
     # ``\r\n`` e ``\r`` viram ``\n``; o resto do código assume linhas simples.
     return text.replace("\r\n", "\n").replace("\r", "\n")
+
+
+def _looks_binary(raw: bytes) -> bool:
+    """Distingue um export de texto de um contêiner binário.
+
+    O teste é a presença de bytes nulos e a fração de bytes de controle: um
+    export de instrumento é ASCII estendido e pode ter ``\\t``/``\\n``, mas não
+    tem ``\\x00`` nem rajadas de bytes de controle. Amostra o primeiro 1 MB --
+    suficiente para decidir e barato mesmo num arquivo de dezenas de MB.
+    """
+    head = raw[:1_000_000]
+    if not head:
+        return False
+    if b"\x00" in head:
+        return True
+    control = sum(1 for b in head if b < 32 and b not in (9, 10, 13))
+    return control / len(head) > 0.05
 
 
 def _split_header_and_body(lines: Sequence[str]) -> tuple[dict[str, str], list[str]]:
@@ -363,10 +418,190 @@ def _match_role(header: str, unit: str) -> str | None:
     return None
 
 
+# ---------------------------------------------------------------------------
+# Formato binário TA Instruments (.tri): mesmo contrato, outra porta
+# ---------------------------------------------------------------------------
+#
+# Um .tri não tem cabeçalho de colunas legível: os canais vêm numerados num
+# bloco binário e seus nomes na chave ``proceduresignals``. O adaptador abaixo
+# reduz o .tri ao mesmo ``TraceFile`` que o caminho de texto produz, para que a
+# resolução de papéis, a conversão de unidades e a validação de coerência sejam
+# as mesmas nos dois casos -- uma segunda porta, não um segundo parser.
+#
+# A unidade não está no arquivo: o TA nomeia o canal ("Heat Flow") sem dizer se
+# é W/g ou mW. Como o dado é normalizado pela massa em toda a série do
+# instrumento, e 1 mW/mg = 1 W/g numericamente, a unidade canônica é declarada
+# aqui e a conversão é a identidade. Declarar isso explicitamente (em vez de
+# deixar ``_unit_of`` devolver vazio e o fator cair em None) é o que faz a
+# coluna ser aceita em vez de recusada por unidade ausente.
+_TRI_ROLE_UNITS: tuple[tuple[str, str, str], ...] = (
+    # (trecho do nome do canal, papel, unidade declarada)
+    #
+    # A unidade vai dentro do cabeçalho entre colchetes, e não no campo
+    # ``unit``, porque é assim que o caminho de texto a entrega: `_unit_of`
+    # extrai o que está entre parênteses/colchetes. Passar "degC" direto no
+    # campo unit não casaria com a chave "c" da UNIT_TABLE sem normalização
+    # extra, e a coluna cairia em factor=None -- recusada por unidade ausente.
+    ("tzero temperature", "temperature", "Temp. [°C]"),
+    ("heat flow", "heat_flow", "Heat Flow [mW/mg]"),
+    ("cell purge", "purge", "Cell Purge [mL/min]"),
+    ("time", "time", "Time [s]"),
+)
+
+
+def _tri_role_and_header(name: str) -> tuple[str | None, str]:
+    """Mapeia um nome de canal .tri para (papel, cabeçalho com unidade).
+
+    O casamento prefere a **igualdade** ao trecho: ``Heat Flow`` é o canal
+    normalizado do instrumento, enquanto ``Heat Flow A``/``Heat Flow B`` são
+    sensores auxiliares. Casar por trecho na ordem do arquivo elegia
+    ``Heat Flow A`` (index 11) no lugar de ``Heat Flow`` (index 13) -- a
+    análise rodaria sobre uma leitura auxiliar sem sinalizar nada.
+
+    Canais auxiliares (``Temperature A/B/C``, ``Heat Flow A/B``, ``Flange``,
+    ``Junction``) **não** recebem papel: são leituras redundantes da mesma
+    grandeza e, se rotuladas, fariam ``resolve_trace`` escolher a primeira
+    por ordem de arquivo em vez da canônica. Ficam listadas como colunas sem
+    papel -- visíveis na prévia, fora da análise.
+    """
+    low = name.strip().lower()
+    # 1) Igualdade exata contra o nome canônico do canal.
+    for needle, role, header in _TRI_ROLE_UNITS:
+        if low == needle:
+            return role, header
+    # 2) Trecho, restrito aos nomes canônicos (não aos auxiliares).
+    for needle, role, header in _TRI_ROLE_UNITS:
+        if needle in low and not re.search(r"\s[a-c]$", low):
+            return role, header
+    return None, name
+
+
+def _clean_procedure(raw: str) -> str:
+    """Remove os prefixos de controle e conserta o grau corrompido.
+
+    O bloco de metadados do .tri é latin-1, então o símbolo de grau chega como
+    a sequência de dois bytes ``Â°``. O regex de taxa procura ``°?C/min`` e não
+    casa com ``Â°C/min`` -- a taxa vinha None em todos os 116 arquivos. Trocar
+    a sequência por ``°`` antes de publicar conserta isso na origem, para que
+    o mesmo regex do caminho de texto funcione nos dois formatos.
+    """
+    cleaned = raw.strip().lstrip("\x01\x02\x03\x04\x05\x06\x07\x08\x0e\x10\r\n")
+    return cleaned.replace("Â°", "°").replace("\u00c2\u00b0", "°")
+
+
+def _read_tri_as_trace_file(p: Path) -> TraceFile:
+    """Converte um .tri no mesmo ``TraceFile`` que o caminho de texto produz."""
+    # Import tardio: o leitor binário importa numpy, e o caminho de texto não
+    # deve pagar esse custo quando o arquivo é .txt.
+    from app.core.io.tri_reader import read_tri
+
+    tri = read_tri(str(p))
+
+    # Metadados: chaves em minúsculas, como no caminho de texto, para que as
+    # propriedades de TraceFile (sample_name, sample_mass_mg, heating_rate)
+    # funcionem sem ramo por formato.
+    meta: dict[str, str] = {}
+    if tri.sample_name:
+        meta["sample"] = tri.sample_name
+    if tri.sample_mass_mg is not None:
+        meta["sample mass /mg"] = str(tri.sample_mass_mg)
+    if tri.procedure:
+        # A taxa de aquecimento vive na procedure ("Ramp 10.00 C/min to 270").
+        # Publicá-la sob "method" deixa TraceFile.heating_rate lê-la com o
+        # mesmo código que lê o #RANGE dos arquivos de texto.
+        meta["method"] = _clean_procedure(tri.procedure)
+
+    columns: list[ParsedColumn] = []
+    seen: set[str] = set()
+    for ch in tri.channels:
+        if not ch.name:
+            continue
+        role, header = _tri_role_and_header(ch.name)
+        # Só o primeiro canal de cada papel entra na análise; os repetidos
+        # ficam sem papel para não competir pela escolha. O primeiro em ordem
+        # de arquivo é o canônico: Time, Tzero Temperature, ... , Heat Flow.
+        if role is not None and role in seen:
+            role = None
+        if role is not None:
+            seen.add(role)
+        columns.append(
+            ParsedColumn(
+                index=ch.index,
+                raw_header=header if role else ch.name,
+                role=role,
+                unit=_unit_of(header) if role else None,
+                factor=None,  # resolvido pela UNIT_TABLE no caminho comum
+                values=ch.values,
+            )
+        )
+
+    warnings: list[str] = []
+    if not columns:
+        raise TraceImportError(f"{p.name}: nenhum canal numérico recuperado do arquivo .tri")
+    roles = {c.role for c in columns}
+    if "temperature" not in roles or "heat_flow" not in roles:
+        warnings.append(
+            "canal de temperatura ou de fluxo de calor ausente: "
+            f"papéis presentes = {sorted(r for r in roles if r)}"
+        )
+
+    tf = TraceFile(path=str(p), metadata=meta, columns=columns, warnings=warnings)
+    # O caminho comum aplica a UNIT_TABLE a partir de (role, unit); o .tri
+    # chega sem fator porque a unidade é declarada, não medida no arquivo.
+    for col in tf.columns:
+        _assign_factor(col)
+    return tf
+
+
+_BINARY_SUFFIXES = frozenset({".tri", ".ngb-sd7", ".ngb", ".sd7"})
+
+
+def _looks_like_tri(raw: bytes) -> bool:
+    """Reconhece um .tri pelo conteúdo, não pelo nome.
+
+    Dois sinais, ambos presentes em todo arquivo do dataset: um bloco PNG
+    embutido (o Trios grava um render do gráfico junto aos dados) e o padrão
+    de ancoragem ``<count><18 bytes><count>`` que o leitor usa para localizar
+    os canais. Checar o conteúdo permite ler um .tri renomeado -- que é o caso
+    real de um export chegado por e-mail ou de um fixture recortado -- sem
+    depender de a extensão sobreviver ao transporte.
+    """
+    if raw[:8] == b"\x89PNG\r\n\x1a\n":
+        return False  # um PNG puro: plot exportado, não um container .tri
+    return b"\x89PNG" in raw[:1_000_000]
+
+
+def _assign_factor(col: ParsedColumn) -> None:
+    """Resolve, no lugar, o fator de conversão de uma coluna para a canônica.
+
+    Fica separado do laço de leitura porque o caminho .tri monta colunas fora
+    desse laço mas precisa da mesma conversão: dois lugares decidindo fator
+    seria uma divergência silenciosa esperando para acontecer.
+    """
+    if not col.role or not col.unit:
+        return
+    table = UNIT_TABLE.get(col.role, {})
+    # Procura a unidade mais específica primeiro (a mais longa).
+    for key in sorted(table, key=len, reverse=True):
+        if key and key in col.unit:
+            col.factor = table[key][0]
+            return
+    col.factor = 1.0 if col.unit == "" else None
+
+
 def read_trace_file(path: str | Path) -> TraceFile:
-    """Lê um arquivo de instrumento e devolve colunas rotuladas e metadados."""
+    """Lê um arquivo de instrumento e devolve colunas rotuladas e metadados.
+
+    Despacha por formato: contêineres binários da TA Instruments vão para o
+    adaptador .tri; todo o resto é tratado como texto delimitado. Os dois
+    caminhos terminam no mesmo ``TraceFile``, então a resolução de papéis e a
+    conversão de unidades são idênticas qualquer que seja a porta de entrada.
+    """
     p = Path(path)
     raw = p.read_bytes()
+    if p.suffix.lower() in _BINARY_SUFFIXES or _looks_like_tri(raw):
+        return _read_tri_as_trace_file(p)
+
     text = _decode(raw)
     lines = text.split("\n")
     meta, body = _split_header_and_body(lines)
@@ -377,7 +612,10 @@ def read_trace_file(path: str | Path) -> TraceFile:
     # O separador declarado no cabeçalho vence qualquer heurística.
     declared = meta.get("separator", "").lower()
     sep = {
-        "semicolon": ";", "comma": ",", "tab": "\t", "space": " ",
+        "semicolon": ";",
+        "comma": ",",
+        "tab": "\t",
+        "space": " ",
         "colon": ":",
     }.get(declared)
     if sep is None and declared in {";", ",", "\t"}:
@@ -398,7 +636,7 @@ def read_trace_file(path: str | Path) -> TraceFile:
         fields = [""] * len(_split_fields(body[header_idx], sep))
 
     headers = fields
-    data_lines = body[header_idx + 1:]
+    data_lines = body[header_idx + 1 :]
 
     # Lê as colunas.
     columns: list[list[float]] = [[] for _ in headers]
@@ -428,26 +666,16 @@ def read_trace_file(path: str | Path) -> TraceFile:
     for j, hdr in enumerate(headers):
         unit = _unit_of(hdr)
         role = _match_role(hdr, unit)
-        factor: float | str | None = None
-        if role and unit:
-            table = UNIT_TABLE.get(role, {})
-            # Procura a unidade mais específica primeiro (a mais longa).
-            for key in sorted(table, key=len, reverse=True):
-                if key and key in unit:
-                    factor = table[key][0]
-                    break
-            else:
-                factor = 1.0 if unit == "" else None
-        parsed.append(
-            ParsedColumn(
-                index=j,
-                raw_header=hdr,
-                role=role,
-                unit=unit or None,
-                factor=factor,
-                values=columns[j],
-            )
+        col = ParsedColumn(
+            index=j,
+            raw_header=hdr,
+            role=role,
+            unit=unit or None,
+            factor=None,
+            values=columns[j],
         )
+        _assign_factor(col)
+        parsed.append(col)
 
     tf = TraceFile(path=str(p), metadata=meta, columns=parsed)
     return tf
@@ -478,7 +706,9 @@ class ResolvedTrace:
     refusals: list[str] = field(default_factory=list)
 
 
-def _apply_factor(values: list[float], factor: float | str | None, unit: str) -> tuple[list[float], str | None]:
+def _apply_factor(
+    values: list[float], factor: float | str | None, unit: str
+) -> tuple[list[float], str | None]:
     """
     Converte uma coluna à unidade canônica.
 
@@ -552,18 +782,14 @@ def resolve_trace(
     yc = _pick(tf, y_role)
 
     if xc is None:
-        found = ", ".join(
-            f"'{c.raw_header or f'coluna {c.index + 1}'}'" for c in tf.columns
-        )
+        found = ", ".join(f"'{c.raw_header or f'coluna {c.index + 1}'}'" for c in tf.columns)
         raise TraceImportError(
             f"Não encontrei a coluna de {_ROLE_LABEL.get(x_role, x_role)}. "
             f"O arquivo tem: {found}. Se o papel da coluna for outro, "
             "renomeie o cabeçalho ou converta o arquivo para CSV de duas colunas."
         )
     if yc is None:
-        found = ", ".join(
-            f"'{c.raw_header or f'coluna {c.index + 1}'}'" for c in tf.columns
-        )
+        found = ", ".join(f"'{c.raw_header or f'coluna {c.index + 1}'}'" for c in tf.columns)
         raise TraceImportError(
             f"Não encontrei a coluna de {_ROLE_LABEL.get(y_role, y_role)}. "
             f"O arquivo tem: {found}."
@@ -573,9 +799,7 @@ def resolve_trace(
     # diferentes quando o instrumento escreve blocos separados.
     n = min(len(xc.values), len(yc.values))
     if n < 3:
-        raise TraceImportError(
-            f"Só {n} ponto(s) utilizáveis: a análise precisa de pelo menos 3."
-        )
+        raise TraceImportError(f"Só {n} ponto(s) utilizáveis: a análise precisa de pelo menos 3.")
     if len(xc.values) != len(yc.values):
         notes.append(
             f"As colunas têm comprimentos diferentes "
@@ -588,11 +812,7 @@ def resolve_trace(
 
     # Uma linha com NaN sobrevive à leitura como NaN. Filtrar aqui, e contar,
     # porque perder metade dos pontos em silêncio mudaria o resultado.
-    mask = [
-        i
-        for i in range(n)
-        if np.isfinite(x_vals[i]) and np.isfinite(y_vals[i])
-    ]
+    mask = [i for i in range(n) if np.isfinite(x_vals[i]) and np.isfinite(y_vals[i])]
     dropped = n - len(mask)
     if dropped:
         notes.append(f"{dropped} ponto(s) não numéricos foram descartados.")
@@ -600,8 +820,7 @@ def resolve_trace(
     y_vals = [y_vals[i] for i in mask]
     if len(x_vals) < 3:
         raise TraceImportError(
-            "Depois de descartar valores não numéricos sobraram menos de 3 "
-            "pontos."
+            "Depois de descartar valores não numéricos sobraram menos de 3 " "pontos."
         )
 
     x_out, x_refuse = _apply_factor(x_vals, xc.factor, xc.unit or "")
