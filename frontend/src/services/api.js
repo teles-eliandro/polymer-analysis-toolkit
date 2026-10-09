@@ -96,13 +96,18 @@ export const thermalApi = {
       smooth_window: smoothWindow,
     }),
 
-  dsc: (temperature, heatFlow, { heatingRate = null, refEnthalpy = null, smoothWindow = 11 } = {}) =>
+  dsc: (
+    temperature,
+    heatFlow,
+    { heatingRate = null, refEnthalpy = null, smoothWindow = 11, sampleName = null } = {},
+  ) =>
     postJson('/api/v1/thermal/dsc', {
       temperature,
       heat_flow: heatFlow,
       heating_rate: heatingRate,
       ref_enthalpy_J_g: refEnthalpy,
       smooth_window: smoothWindow,
+      sample_name: sampleName,
     }),
 };
 

@@ -1183,3 +1183,124 @@ footer a {
   color: var(--warn, #8a5a00);
   font-style: italic;
 }
+
+/* Comparison against published ranges. The three verdicts are colour-coded
+   but each also carries an icon and a word, so the meaning survives without
+   colour. "not comparable" is styled as neutral rather than as a failure: it
+   is an honest absence of comparison, not bad news about the sample. */
+.comparison-panel {
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border, #dfe3e8);
+}
+
+.comparison-intro {
+  margin: 0 0 14px;
+  font-size: 0.86rem;
+  color: var(--text-muted, #5b6270);
+}
+
+.comparison-list {
+  display: grid;
+  gap: 10px;
+}
+
+.comparison {
+  padding: 10px 12px;
+  border: 1px solid var(--border, #dfe3e8);
+  border-left-width: 3px;
+  border-radius: var(--radius-sm, 5px);
+  background: var(--surface, #fff);
+}
+
+.comparison.verdict-within {
+  border-left-color: var(--ok, #1a7f4b);
+}
+
+.comparison.verdict-outside {
+  border-left-color: var(--warn, #8a5a00);
+  background: var(--warn-soft, #fdf3e0);
+}
+
+.comparison.verdict-none {
+  border-left-color: var(--text-faint, #878e9c);
+  background: #fafbfc;
+}
+
+.comparison-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.comparison-icon {
+  font-weight: 700;
+}
+
+.verdict-within .comparison-icon {
+  color: var(--ok, #1a7f4b);
+}
+
+.verdict-outside .comparison-icon {
+  color: var(--warn, #8a5a00);
+}
+
+.verdict-none .comparison-icon {
+  color: var(--text-faint, #878e9c);
+}
+
+.comparison-prop {
+  font-weight: 600;
+}
+
+.comparison-verdict {
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted, #5b6270);
+}
+
+.comparison-values {
+  margin-top: 4px;
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 0.86rem;
+}
+
+.comparison-measured {
+  font-variant-numeric: tabular-nums;
+}
+
+.comparison-range {
+  color: var(--text-muted, #5b6270);
+}
+
+.comparison-method {
+  font-style: normal;
+  color: var(--text-faint, #878e9c);
+}
+
+.comparison-reason,
+.comparison-note,
+.comparison-source,
+.comparison-polymer {
+  margin: 6px 0 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--text-muted, #5b6270);
+}
+
+.comparison-note {
+  color: var(--warn, #8a5a00);
+}
+
+.comparison-source,
+.comparison-polymer {
+  color: var(--text-faint, #878e9c);
+}
+
+.comparison-source-label {
+  font-weight: 600;
+}

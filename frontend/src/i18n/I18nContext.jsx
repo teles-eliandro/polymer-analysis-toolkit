@@ -196,6 +196,19 @@ const MESSAGES = {
     'confidence.suggested.hint':
       'An inference from the shape of the trace. It can be wrong: on real instrument data the transition identification is not reliable enough to call a measurement.',
     'confidence.why': 'Why this value?',
+    'comparison.title': 'Compared against published values',
+    'comparison.intro':
+      'Your measured values next to the ranges published for this polymer. The ranges are data from the cited sources, not an inference from this tool.',
+    'comparison.within': 'within range',
+    'comparison.outside': 'outside range',
+    'comparison.not_comparable': 'not comparable',
+    'comparison.publishedRange': 'published',
+    'comparison.notReported': 'not reported',
+    'comparison.source': 'Source',
+    'comparison.polymer': 'Polymer',
+    'thermal.sampleName': 'Sample name',
+    'thermal.sampleNameHint':
+      'Used to identify the polymer and compare against published values. Matching is tolerant of instrument naming (PLA1-AR, Nylon66). Left empty, no comparison is made.',
     'thermal.reliable': 'stable on resampling',
     'thermal.notReliable': 'UNSTABLE - do not quote without repeats',
     'thermal.TgNote':
@@ -557,6 +570,19 @@ const MESSAGES = {
     'confidence.suggested.hint':
       'Inferência a partir da forma do traço. Pode estar errada: em dados reais de instrumento a identificação de transição não é confiável o bastante para ser chamada de medição.',
     'confidence.why': 'Por que este valor?',
+    'comparison.title': 'Comparado com valores publicados',
+    'comparison.intro':
+      'Seus valores medidos ao lado das faixas publicadas para este polímero. As faixas são dados das fontes citadas, não uma inferência desta ferramenta.',
+    'comparison.within': 'dentro da faixa',
+    'comparison.outside': 'fora da faixa',
+    'comparison.not_comparable': 'não comparável',
+    'comparison.publishedRange': 'publicado',
+    'comparison.notReported': 'não reportado',
+    'comparison.source': 'Fonte',
+    'comparison.polymer': 'Polímero',
+    'thermal.sampleName': 'Nome da amostra',
+    'thermal.sampleNameHint':
+      'Usado para identificar o polímero e comparar com valores publicados. A correspondência tolera a nomenclatura do instrumento (PLA1-AR, Nylon66). Se vazio, nenhuma comparação é feita.',
     'thermal.reliable': 'estável ao reamostrar',
     'thermal.notReliable': 'INSTÁVEL - não cite sem repetições',
     'thermal.TgNote':
@@ -919,6 +945,19 @@ const MESSAGES = {
     'confidence.suggested.hint':
       'Inferencia a partir de la forma de la traza. Puede estar equivocada: en datos reales de instrumento la identificación de transiciones no es lo bastante fiable para llamarla medición.',
     'confidence.why': '¿Por qué este valor?',
+    'comparison.title': 'Comparado con valores publicados',
+    'comparison.intro':
+      'Sus valores medidos junto a los rangos publicados para este polímero. Los rangos son datos de las fuentes citadas, no una inferencia de esta herramienta.',
+    'comparison.within': 'dentro del rango',
+    'comparison.outside': 'fuera del rango',
+    'comparison.not_comparable': 'no comparable',
+    'comparison.publishedRange': 'publicado',
+    'comparison.notReported': 'no reportado',
+    'comparison.source': 'Fuente',
+    'comparison.polymer': 'Polímero',
+    'thermal.sampleName': 'Nombre de la muestra',
+    'thermal.sampleNameHint':
+      'Se usa para identificar el polímero y comparar con valores publicados. La coincidencia tolera la nomenclatura del instrumento (PLA1-AR, Nylon66). Si está vacío, no se hace ninguna comparación.',
     'thermal.reliable': 'estable al remuestrear',
     'thermal.notReliable': 'INESTABLE - no citar sin repeticiones',
     'thermal.TgNote':

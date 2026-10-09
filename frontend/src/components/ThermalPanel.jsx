@@ -15,6 +15,7 @@ import {
 } from './ui';
 import FileDrop from './FileDrop';
 import { Formula, FormulaDisclosure } from './Formula';
+import { ComparisonPanel } from './Comparison';
 
 function TraceInput({ label, hint, placeholder, value, onChange }) {
   return (
@@ -39,6 +40,7 @@ export default function ThermalPanel() {
   const [dscText, setDscText] = useState('');
   const [heatingRate, setHeatingRate] = useState('10');
   const [refEnthalpy, setRefEnthalpy] = useState('');
+  const [sampleName, setSampleName] = useState('');
 
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -127,6 +129,7 @@ export default function ThermalPanel() {
         const res = await thermalApi.dsc(x, y, {
           heatingRate: heatingRate === '' ? null : Number(heatingRate),
           refEnthalpy: refEnthalpy === '' ? null : Number(refEnthalpy),
+          sampleName: sampleName.trim() === '' ? null : sampleName.trim(),
         });
         setResult({ kind: 'dsc', data: res.data });
       }
@@ -228,6 +231,18 @@ export default function ThermalPanel() {
                 <span className="field-hint">{t('thermal.refEnthalpyHint')}</span>
               </label>
             </div>
+            <label className="field">
+              <span className="field-label">
+                {t('thermal.sampleName')} <em>({t('common.optional')})</em>
+              </span>
+              <input
+                type="text"
+                value={sampleName}
+                placeholder="e.g. PLA1-AR, PS5, Nylon66"
+                onChange={(e) => setSampleName(e.target.value)}
+              />
+              <span className="field-hint">{t('thermal.sampleNameHint')}</span>
+            </label>
           </>
         )}
 
@@ -468,6 +483,8 @@ function DscResults({ data, t }) {
           />
         ) : null}
       </StatGrid>
+
+      <ComparisonPanel comparisons={data.comparisons} />
 
       <div className="plot">
         <Plot

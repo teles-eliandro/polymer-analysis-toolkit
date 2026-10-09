@@ -95,6 +95,16 @@ const openThermal = () => {
 /** The card wraps the mode banner and the input, so its text is what is read. */
 const cardText = () => document.querySelector('.card').textContent;
 
+/**
+ * The trace box, addressed as the textarea.
+ *
+ * The DSC panel also carries a text input for the sample name, so a bare
+ * getByRole('textbox') now matches two elements. Naming the textarea keeps
+ * these assertions about the trace rather than about whichever text field
+ * happens to come first in the DOM.
+ */
+const traceBox = () => document.querySelector('textarea');
+
 describe('thermal mode clarity', () => {
   test('the active mode is stated in words, not just a highlighted tab', () => {
     openThermal();
@@ -138,7 +148,7 @@ describe('thermal clear button', () => {
     expect(box).toHaveValue(TGA_ROWS);
 
     fireEvent.click(clearBtn());
-    expect(screen.getByRole('textbox')).toHaveValue('');
+    expect(traceBox()).toHaveValue('');
   });
 
   test('removes the result on screen, not only the input', async () => {
@@ -153,7 +163,7 @@ describe('thermal clear button', () => {
     fireEvent.click(clearBtn());
     // Both the plot and the textarea must be gone, or the panel is not clear.
     expect(screen.queryByTestId('plot')).not.toBeInTheDocument();
-    expect(screen.getByRole('textbox')).toHaveValue('');
+    expect(traceBox()).toHaveValue('');
   });
 
   test("clearing one mode does not touch the other mode's data", () => {
@@ -161,13 +171,13 @@ describe('thermal clear button', () => {
     fireEvent.change(tgaBox, { target: { value: TGA_ROWS } });
 
     fireEvent.click(screen.getByRole('tab', { name: /DSC/i }));
-    const dscBox = screen.getByRole('textbox');
+    const dscBox = traceBox();
     fireEvent.change(dscBox, { target: { value: '30\t-0.13\n180\t-0.2' } });
     fireEvent.click(clearBtn());
     expect(dscBox).toHaveValue('');
 
     fireEvent.click(screen.getByRole('tab', { name: /TGA/i }));
     // The TGA trace was never cleared, so it must still be there.
-    expect(screen.getByRole('textbox')).toHaveValue(TGA_ROWS);
+    expect(traceBox()).toHaveValue(TGA_ROWS);
   });
 });
