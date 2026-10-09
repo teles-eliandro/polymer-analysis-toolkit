@@ -655,6 +655,63 @@ with the reason in `refusals`, which is the same rule already applied to a
 crystallinity with no reference enthalpy. The rule generalises: when the tool
 states that a quantity cannot be determined, it must not also report it.
 
+### 3.10 A second door into the same analysis, and the three defects it opened
+
+§3.9 added a reader for the instrument's text export. That left the tool with
+two entrances to the same analysis: `read_trace_file` for delimited text, which
+resolved column roles, converted units and checked coherence, and `read_tri`,
+which decoded the TA Instruments binary container and did none of those things.
+A researcher holding a `.tri` — the format the instrument actually writes, with
+the text export being a secondary artefact — could decode the numbers but not
+feed them to the analysis on the same terms.
+
+Reducing the binary reader to the same `TraceFile` the text path produces
+removes the distinction: one dispatch on file content chooses the reader, and
+the analysis no longer knows which format it was handed. The work was small.
+The defects it exposed were not, and all three were found by running the
+unified path against the 116 real files of figshare 24462004 rather than by
+review.
+
+**The wrong channel, chosen silently.** Channel names were matched by substring
+in file order. The file writes `Heat Flow A`, `Heat Flow B` and then `Heat
+Flow`; the substring `heat flow` matches all three, so the reader elected
+`Heat Flow A` — an auxiliary sensor — at index 11 instead of the instrument's
+normalised `Heat Flow` at index 13. Temperature had the same shape, with six
+channels (`Tzero`, `Reference`, `Junction`, `Flange`, `A`, `B`, `C`) eligible
+under one spelling. Nothing in the output would have indicated that the
+analysis ran on an auxiliary reading: the units are identical and the curve
+looks plausible. Exact equality now precedes substring matching, and the
+auxiliary channels are listed with no role at all, so they are visible in the
+preview and ineligible for the analysis.
+
+**A truncated heating rate.** The metadata block is latin-1, so the degree sign
+arrives as the two-byte sequence `Â°`. The rate regex looks for `°?C/min`,
+which does not match `Â°C/min`. The heating rate came back `None` on all 116
+files — and a missing heating rate is not a cosmetic loss, it disables the
+enthalpy normalisation in silence, so ΔHm and crystallinity would have been
+reported as absent for reasons the caller could not see. Repairing the sequence
+at the point of reading lets the same regex serve both formats.
+
+**Binary content accepted as text.** `_decode` tried UTF-8 and fell back to
+latin-1, which decodes *every* byte. A PNG, or any proprietary container, was
+therefore read as text and returned a `TraceFile` whose "columns" were
+invented from whatever byte runs happened to look numeric. The analysis then
+ran on that. This is the worst shape of failure in this document — no error, no
+warning, and output that is entirely artefact. Content that looks binary is now
+refused, with the likely cause named, before any parsing is attempted.
+
+The first of the three is the one worth dwelling on. It is the same defect as
+§3.1 and §3.8 in a different costume: a plausible number produced from the
+wrong input, with nothing in the output marking it as wrong. The 116-file set
+caught it because one file's channel order differs from another's; a single
+file, inspected by eye, would not have.
+
+Test coverage: 11 new tests against a 1.3 MB trimmed fixture of a real
+polystyrene run (header plus all 14 channels), pinning the format detection by
+content rather than extension, the metadata recovery including the corrupted
+degree sign, the election of canonical channels over auxiliary ones, and the
+refusal of binary input. Backend suite at 369 passing.
+
 
 ---
 
