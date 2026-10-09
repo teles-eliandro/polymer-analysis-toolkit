@@ -110,6 +110,68 @@ that a deployment is working.
 
 ---
 
+## 🎯 What this tool is reliable for, and what it is not
+
+PAT does two different kinds of work, and they do not deserve the same trust.
+The interface says which is which, per number.
+
+### Reliable — the tool does this and you can depend on it
+
+| Capability | Why it is dependable |
+|---|---|
+| **Reading instrument files** | TA Instruments `.tri` binary is decoded channel-by-channel and verified: all 14 channels of a real trace agree with each other and the recovered temperature reproduces the programmed method (116/116 files on the figshare 24462004 set). |
+| **Plotting the data** | A deterministic transform of the input. Nothing is smoothed, resampled or regenerated behind your back. |
+| **Reporting what the file says** | Sample mass, pan type, operator, the programmed method, the acquisition rate — read from the file, not inferred. |
+| **Published formulas over declared inputs** | Molar-mass averages, Mark–Houwink, Scherrer, enthalpy integration, crystallinity from a reference enthalpy. Cite the formula and the bounds and you reproduce the number. |
+
+### Suggested — the tool infers this, and you should check it
+
+**Identifying which transition is which** is an inference from the shape of the
+trace, and on real data it is wrong often enough that it is never presented as
+a measurement.
+
+This is measured, not a hedge. On the 116 real DSC traces of the figshare
+24462004 set, the reported glass transition lands inside the published window
+for its polymer on roughly **30 %** of files. The detector has reported a
+melting temperature for **amorphous polystyrene**, which has no melting
+transition at all. Three independent shape discriminators were tested against
+that set — peak prominence, return-to-baseline, and transition width — and
+none separates a melting endotherm from a glass transition, because the two
+events can have arbitrary and overlapping sizes.
+
+### How the interface says so
+
+Each reported value carries a confidence rung and the evidence behind it:
+
+```
+read       a property of the input file, or a deterministic transform
+formula    a published formula over a declared input; reproducible
+suggested  an inference from the trace shape; can be wrong
+```
+
+Transition temperatures are **always** `suggested`. An enthalpy is `formula`
+over a `suggested` peak, which is what makes it only as good as the peak
+identification — and the claim says so.
+
+A suggested transition is shown with the observations that produced it, so you
+can judge the inference rather than trust it:
+
+```
+Tm = 151.2 °C   [suggested]
+  · endothermic excursion that returns to the local baseline
+  · ΔHm = 34.2 J/g over the fitted baseline
+  ⚠ Confirm against the expected Tm for this polymer before quoting it.
+```
+
+**A limitation worth knowing.** The `Tg_reliable` flag measures whether the
+reported Tg is *stable* under resampling of the trace — not whether it is
+*correct*. A consistently wrong answer is a stable one: on the PLA trace the
+flag reports "moves 0.0 K" while the value sits in the melting region and the
+polymer's real Tg is ~60 °C lower. Stability is not accuracy, and the flag is
+labelled as what it is.
+
+---
+
 ## 🚀 Running locally
 
 ### Backend

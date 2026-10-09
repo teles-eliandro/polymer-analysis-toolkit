@@ -32,6 +32,22 @@ families of samples; the third produced an impossible quantity that was reported
 without comment. The failures were not arithmetic. They were the absence of a
 check on the *input*.
 
+A fourth round, on 116 raw DSC traces from that same laboratory, drew a
+boundary the earlier work had left implicit. The tool reads and plots those
+files correctly — the decoder recovers all fourteen channels and reconstructs
+the programmed method — but **identifying which transition is which is not
+reliable**: the glass transition lands in its published window about 30 % of
+the time, and the melting detector reported a melting temperature for
+amorphous polystyrene, which cannot melt. Four independent shape
+discriminators were tested against the real set; none separates a melting
+endotherm from a glass transition, because the two events can have arbitrary
+and overlapping sizes. Since that boundary cannot be moved by tuning, the tool
+was changed to state it instead of crossing it: every reported value now
+carries a confidence rung — *read*, *formula*, or *suggested* — and transition
+temperatures are never presented as anything but suggested. The general
+finding is that a tool whose inference cannot be made reliable should be built
+to say so per field, rather than to be trusted or distrusted as a whole.
+
 All reference values used here were downloaded by a script in the repository.
 None was transcribed by hand.
 
@@ -51,11 +67,31 @@ assumptions attached.
 | Rheology | Frequency sweep (ω, G′, G″) | Crossover, plateau modulus, terminal slopes, gel test |
 | Structure | XRD pattern, FTIR spectrum | Peak indexing, d-spacing, crystallite size; band assignments |
 
+### 1.1 Two kinds of result, and why they are separated
+
+Each returned number carries a confidence rung, because the modules do not all
+do the same kind of work:
+
+| Rung | Meaning | Examples |
+|---|---|---|
+| `read` | A property of the input file, or a deterministic transform of it | time and temperature axes, sample mass, programmed method, the plotted curve |
+| `formula` | A published formula applied to a declared input; reproducible from the formula and its bounds | molar-mass averages, Mark–Houwink, Scherrer, enthalpy integration, crystallinity from a reference enthalpy |
+| `suggested` | An inference from the shape of the trace; can be wrong | **which transition is which** — Tg, Tm, Tc |
+
+The distinction is not cosmetic and the third rung is not a hedge. On the 116
+real DSC traces of §3.6 and item 4 of §4 the transition identification is wrong often
+enough that presenting it as a measurement would be misleading, while reading
+the file and plotting it are correct in every file tested. A `formula` result
+built on a `suggested` input (an enthalpy integrated over a suggested peak)
+states that dependency, because it inherits the peak's uncertainty rather than
+escaping it. Every `suggested` value is returned with the observations that
+produced it, so the inference can be judged instead of trusted.
+
 The interface is trilingual (English, Portuguese, Spanish) and the backend
 exposes an OpenAPI schema; the frontend consumes response field names from
 that schema rather than assuming them.
 
-### 1.1 Molar-mass averages
+### 1.2 Molar-mass averages
 
 Weight fractions are assumed, since that is the convention in GPC/SEC raw data:
 
@@ -354,6 +390,54 @@ confidence bootstrap and the single-pass analysis produce the **identical**
 melting temperature to sixteen digits. The bootstrap computes an uncertainty
 and does not change the answer, which is why it is now separable.
 
+### 3.6 A melting temperature read from the end of the programmed ramp
+
+The melting detector located its peak with `argmax(y − chord)`, where the chord
+joins the first and last sample of the scan. That construction is degenerate
+whenever the curve lies entirely below the chord: the residual's maximum is
+then exactly `0.0` and occurs at index 0 **by definition**, because the chord
+touches the curve at both ends. On the figshare 24462004 traces this is the
+rule rather than the exception — the heat flow at the start of a ramp is the
+global maximum of the series (the sample is coldest there, and the instrument
+stores exothermic-up) — so the degeneracy fired on PLA, EVA, PET, PBT and ABS
+alike:
+
+| File | Reported Tm | What it actually was |
+|---|---|---|
+| `PLA1-AR` | **−90.06 °C** | the first sample of the ramp |
+| `EVA2-AR` | **−90.06 °C** | the first sample of the ramp |
+| `PET2-AR` | **−0.06 °C** | the first sample of the ramp |
+| `PE-NEW-AR` | **159.43 °C** | the last sample of the ramp |
+
+Because the melting window is what the glass-transition search then excludes, a
+wrong Tm poisoned the Tg as well — which is why the reliability flag never once
+fired `True` across the 116 traces.
+
+Two things are worth separating, because only the first was fixed. The initial
+defect was in the *locator*; the second was in the *refinement*, which then
+re-entered the same bug through a different door. After the locator was
+rewritten to find a peak by shape — a point that is the maximum of its own
+neighbourhood, a definition that cannot degenerate because it never references
+the scan's ends — the refinement still called `nanargmax(abs(excess))` over the
+*whole* trace, which returns index 0 wherever the fitted baseline is furthest
+from the curve, typically at an extrapolated end. On `PET2-AR` that returned
+index 0 and the reported Tm went back to `−0.06` even though the shape search
+had already found the real endotherm at 254.0 °C. Confining the refinement to
+the candidate's neighbourhood is what actually closed the defect.
+
+Measured on the full 116-file sweep:
+
+| | Before | After |
+|---|---|---|
+| Tm reporting the end of the ramp | ~13 files | **0** |
+| Tm outside the published window | 13/116 | 10/116 |
+| Newly reporting a Tm that is not there | — | 4 files |
+
+The absurd mode is gone; the overall hit rate is not fixed, and four traces
+(EVA at 234.9 °C against an expected 60–100, PP2 at 233.1 against 150–175) now
+report a melting temperature that is not present. This is recorded as a
+regression in the account, not hidden in the diff.
+
 ---
 
 ## 4. What is not established
@@ -375,14 +459,37 @@ the claim to be revisited instead of decaying unnoticed.
    107 traces, **71 report a Tg outside its literature window**, and the
    failures are systematic rather than scattered: PE, PP and Nylon report
    175–271 °C, which is the flank of the melting peak and not a glass
-   transition at all. Three separate discriminators were attempted — a
-   shape-symmetry gate, a width test, and a step-versus-peak test — each of
-   which passed its synthetic case and each of which failed here. The
-   detectors were then reverted rather than tuned further, because the
-   attempts were degrading the amorphous cases that do work (PS, PVC, PC and
-   ABS, all four within a few degrees of their published values). A defect
-   that resists three attempts may be misdiagnosed rather than merely hard,
-   and further patching was making the suite worse, not better.
+   transition at all. Four separate discriminators have now been attempted —
+   a shape-symmetry gate, a width test, a step-versus-peak test, and a
+   prominence-over-the-transition-width test — each of which passed its
+   synthetic case and each of which failed on this set. The failure is
+   quantifiable and is the reason the tool no longer presents transition
+   temperatures as measurements: on these 116 traces the glass transition
+   lands in the published window about **30 %** of the time, and the melting
+   detector has reported a melting temperature for **amorphous polystyrene**,
+   which has no melting transition. The three shape metrics were measured
+   against the real set and none separates a melting endotherm from a glass
+   transition:
+
+   | Discriminator | Melting polymers | Amorphous polymers | Separates |
+   |---|---|---|---|
+   | Peak prominence, as a fraction of the trace range | 0.155–0.354 | 0.018–**0.378** | no — PS scores highest |
+   | Return to the pre-event level | 0.710–1.382 | 0.236–**3.354** | no — the amorphous range contains the melting range |
+   | Transition width | 12.8 °C | 14.0 °C | no |
+
+   Amplitude and shape cannot do this, because a melting endotherm and a
+   glass transition can have arbitrary and overlapping sizes. The conclusion
+   recorded here is that identifying which transition is which is **not a
+   threshold-calibration problem**, and that a fourth parameter sweep would
+   have produced a fourth failure.
+
+   One defect in this area *was* found and fixed (see §3.6): the melting peak
+   was being located with `argmax(y − chord)`, which is degenerate whenever
+   the curve lies below the chord and returned the temperature at the end of
+   the programmed ramp on PLA, EVA, PET and PBT. That mode is eliminated —
+   no trace now reports the ramp end as a melting temperature — but the
+   overall hit rate on semicrystalline polymers is unchanged, and four traces
+   now report a melting temperature that is not there.
 5. **Melting enthalpy under inverted polarity.** With the sign corrected, Tm is
    right and `ΔHm` is wrong by two orders of magnitude — PLA reports 0.229 J/g
    against a plausible 20–40 J/g, and a fully crystalline reference of 93 J/g.
@@ -398,6 +505,15 @@ the claim to be revisited instead of decaying unnoticed.
    disagree with each other, as do PS3-AR and PS3-CRYO). The sign is a property
    of the instrument, not of the sample, so it belongs to the dataset; deriving
    it per file is the wrong unit of analysis and is why the instability appears.
+7. **Stability is not accuracy.** The `Tg_reliable` flag measures whether the
+   reported Tg moves when the trace is resampled. It therefore certifies
+   *reproducibility of the computation*, not *correctness of the answer*: on
+   PLA1-AR it reports the value as stable to 0.0 K while that value (156 °C)
+   lies in the melting region and the polymer's Tg is roughly 60 °C lower. A
+   consistently wrong answer is a stable one. Until a certified thermal
+   reference is available, no footing computed from the sample's own trace can
+   distinguish the two, and the field is labelled accordingly rather than
+   presented as a trust signal.
 
 Accordingly: the mathematics is verified against exact cases, agreement with
 instrument-reported values is **4.9 % median in Mw** over the samples where
