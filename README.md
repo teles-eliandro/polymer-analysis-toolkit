@@ -1,6 +1,7 @@
 # Polymer Analysis Toolkit (PAT)
 
 [![Démo en ligne](https://img.shields.io/badge/Démo-Vercel-000000?logo=vercel)](https://polymer-analysis-toolkit.vercel.app)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23286304.svg)](https://doi.org/10.5281/zenodo.23286304)
 [![Licence](https://img.shields.io/badge/Licence-MIT-blue)](LICENSE)
 [![CI](https://github.com/teles-eliandro/polymer-analysis-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/teles-eliandro/polymer-analysis-toolkit/actions/workflows/ci.yml)
 
@@ -283,11 +284,17 @@ same record:
 
 - [`CITATION.cff`](CITATION.cff) — GitHub's **Cite this repository** button
   (validates against CFF schema 1.2.0)
-- [`.zenodo.json`](.zenodo.json) — used by Zenodo when the repository is archived
+- [`.zenodo.json`](.zenodo.json) — the metadata Zenodo read when archiving
   (it takes precedence over `CITATION.cff` there)
 
-Until the archived record exists, cite the repository URL and the release tag.
-A DOI is **not** claimed before one is minted.
+The archived record is:
+
+> **Teles, E. P.** (2026). *Polymer Analysis Toolkit: characterisation analysis
+> that states its own limits* (v1.0.0). Zenodo.
+> <https://doi.org/10.5281/zenodo.23286304>
+
+Cite the **concept DOI** — <https://doi.org/10.5281/zenodo.23286303> — if you
+want a reference that keeps resolving to the most recent version.
 
 ## 🤖 AI assistance
 

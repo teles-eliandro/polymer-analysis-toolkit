@@ -89,6 +89,14 @@ one hypothesis of the assistant's that the data refuted, in
 ## Citing
 
 See [`CITATION.cff`](../CITATION.cff) (validates against CFF schema 1.2.0) or
-[`.zenodo.json`](../.zenodo.json). Once Zenodo has archived this release, the
-DOI is the identifier to cite; until then, cite the repository URL and the
-`v1.0.0` tag.
+[`.zenodo.json`](../.zenodo.json).
+
+Zenodo archived this release on 2026-10-10. **Cite the DOI:**
+
+> **Teles, E. P.** (2026). *Polymer Analysis Toolkit: characterisation analysis
+> that states its own limits* (v1.0.0). Zenodo.
+> <https://doi.org/10.5281/zenodo.23286304>
+
+Concept DOI, which always resolves to the most recent version:
+<https://doi.org/10.5281/zenodo.23286303>. Intrinsic fallback for the same
+content: `swh:1:snp:66fc1bb03cd1308be19875b7757f082a2b053497`.

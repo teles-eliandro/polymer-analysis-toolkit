@@ -1407,24 +1407,20 @@ the work was produced outside any current appointment or enrolment; and the AI
 assistance that wrote the implementation and drafted this document is **declared
 and credited, not listed as an author**, which neither arXiv nor COPE permits.
 
-**Status of the persistent identifier.** The repository is prepared for
-archiving — metadata validated, licence present, release notes written. Three
-identifiers exist, in increasing order of persistence:
+**Persistent identifiers.** The work is archived. Three identifiers exist, in
+increasing order of persistence:
 
 | Identifier | Value | Notes |
 |---|---|---|
 | Repository commit | on `main` | changes with every commit |
 | Software Heritage snapshot | `swh:1:snp:66fc1bb03cd1308be19875b7757f082a2b053497` | intrinsic and content-addressed; obtained 2026-10-10 by a public archive request, no account involved |
-| DOI | *not yet minted* | see below |
+| **DOI** | **`10.5281/zenodo.23286304`** | v1.0.0, minted 2026-10-10 by Zenodo from the release webhook. Concept DOI (always the latest version): `10.5281/zenodo.23286303` |
 
-The DOI has **not** been minted at the time of writing, and none is claimed
-here. Zenodo mints it on the webhook that fires when a release is created
-*after* the repository's archiving toggle is enabled; a release cut before that
-is silently skipped, which is why no release has been cut — a `v1.0.0` tag that
-archived nothing would be worse than no tag. Until the archived record exists,
-the Software Heritage SWHID above is the citable identifier: it is derived from
-the content itself and stays stable no matter what happens to the repository,
-the hosting account or the domain.
+**Cite the DOI.** The Zenodo record (<https://zenodo.org/records/23286304>)
+carries the same metadata as `CITATION.cff` and archives the tagged tree, so it
+is the identifier that survives the repository, the hosting account and the
+domain. The SWHID is the fallback for the same content, and the concept DOI is
+the one to cite if this work is later revised.
 
 ---
 

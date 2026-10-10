@@ -26,13 +26,17 @@ license: MIT
 type: software
 repository-code: "https://github.com/teles-eliandro/polymer-analysis-toolkit"
 url: "https://polymer-analysis-toolkit.vercel.app"
+doi: "10.5281/zenodo.23286304"
 identifiers:
+  - type: doi
+    value: "10.5281/zenodo.23286303"
+    description: "Concept DOI — always resolves to the most recent version of this record"
   - type: swh
     value: "swh:1:snp:66fc1bb03cd1308be19875b7757f082a2b053497"
     description: "Software Heritage snapshot of this repository — intrinsic and content-addressed"
   - type: url
     value: "https://github.com/teles-eliandro/polymer-analysis-toolkit"
-    description: "Repository. No DOI is minted at the version below; see the 'identifiers' note in docs/README.md — a DOI is minted on the first release archived after the Zenodo toggle is enabled."
+    description: "Repository"
 keywords:
   - polymer characterization
   - differential scanning calorimetry
