@@ -234,24 +234,28 @@ export default function RheologyPanel() {
         />
         <Formula
           name={t('rheo.f.gel.name')}
-          expression="gel point: the w where |G' - G''| / G' <= tolerance,  with G' > G''"
+          expression="|G' − G''| / G' ≤ tol,  G' > G''"
+          expressionNote={t('rheo.f.gel.expressionNote')}
           symbols={[
             { symbol: "G'", meaning: t('rheo.f.gel.Gp') },
             { symbol: "G''", meaning: t('rheo.f.gel.Gpp') },
           ]}
           note={t('rheo.f.gel.note')}
-          reference="Winter & Chambon, Analysis of linear viscoelasticity of a crosslinking polymer at the gel point, Journal of Rheology 30 (1986) 367-382. The rigorous criterion is a power law in both moduli; crossing of the two is a practical approximation."
+          reference="Winter & Chambon, Analysis of linear viscoelasticity of a crosslinking polymer at the gel point, Journal of Rheology 30 (1986) 367-382."
+          referenceNote={t('rheo.f.gel.referenceNote')}
         />
         <Formula
           name={t('rheo.f.cross.name')}
-          expression="cross-over: G' = G''  ->  tan d = 1"
+          expression="G' = G'',  tan δ = 1"
+          expressionNote={t('rheo.f.cross.expressionNote')}
           symbols={[
             { symbol: "G'", meaning: t('rheo.f.cross.Gp') },
             { symbol: "G''", meaning: t('rheo.f.cross.Gpp') },
             { symbol: 'tan d', meaning: t('rheo.f.cross.tan') },
           ]}
           note={t('rheo.f.cross.note')}
-          reference="ASTM D4440-15. The cross-over of the moduli is a practical marker of the terminal-to-plateau transition for a linear polymer; it shifts with frequency, so the value is only comparable between measurements made at the same angular frequency."
+          reference="ASTM D4440-15."
+          referenceNote={t('rheo.f.cross.referenceNote')}
         />
       </FormulaDisclosure>
     </div>

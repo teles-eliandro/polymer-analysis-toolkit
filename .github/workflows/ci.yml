@@ -65,11 +65,22 @@ jobs:
           CI: "true"
         run: npm test -- --watchAll=false
 
+      - name: Locale accents
+        working-directory: frontend
+        # Um valor sem acento nao quebra nada: compila, os testes passam, a
+        # pagina renderiza "Medias numerica e ponderal". Nenhum teste funcional
+        # pega isso, porque o valor continua sendo uma string nao vazia. Só um
+        # humano lendo a tela pega -- entao ele tem de ser um portao.
+        run: python3 scripts/check_locale_accents.py
+
       - name: Build
         working-directory: frontend
         env:
           # A placeholder keeps the build from failing when the production
           # URL is not configured in CI; the real value is set in Vercel.
-          REACT_APP_API_URL: https://pat-backend.onrender.com
+          # It has to name the service that actually exists: this pointed at
+          # pat-backend.onrender.com, which is not a Render service. A stale
+          # placeholder is invisible until someone copies it into a real env.
+          REACT_APP_API_URL: https://polymer-analysis-toolkit.onrender.com
           CI: "false"
         run: npm run build

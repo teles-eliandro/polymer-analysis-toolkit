@@ -386,7 +386,7 @@ export default function MolecularPanel() {
       <FormulaDisclosure>
         <Formula
           name={t('mol.f.mn.name')}
-          expression="Mn = sum(Ni Mi) / sum(Ni)      Mw = sum(Ni Mi^2) / sum(Ni Mi)"
+          expression="Mn = Σ(Ni Mi) / Σ(Ni)      Mw = Σ(Ni Mi²) / Σ(Ni Mi)"
           symbols={[
             { symbol: 'Ni', meaning: t('mol.f.mn.Ni') },
             { symbol: 'Mi', meaning: t('mol.f.mn.Mi') },
@@ -396,24 +396,25 @@ export default function MolecularPanel() {
         />
         <Formula
           name={t('mol.f.pdi.name')}
-          expression="D = Mw / Mn   (dispersity, formerly polydispersity index)"
+          expression="D = Mw / Mn"
+          expressionNote={t('mol.f.pdi.expressionNote')}
           symbols={[
             { symbol: 'D', meaning: t('mol.f.pdi.D') },
             { symbol: 'Mw', meaning: t('mol.f.pdi.Mw') },
             { symbol: 'Mn', meaning: t('mol.f.pdi.Mn') },
           ]}
           note={t('mol.f.pdi.note')}
-          reference="IUPAC recommends the term dispersity and the symbol D. A value below 1 is not a narrow distribution but an error in the data or the calculation."
+          referenceNote={t('mol.f.pdi.referenceNote')}
         />
         <Formula
           name={t('mol.f.mz.name')}
-          expression="Mz = sum(Ni Mi^3) / sum(Ni Mi^2)"
+          expression="Mz = Σ(Ni Mi³) / Σ(Ni Mi²)"
           symbols={[
             { symbol: 'Ni', meaning: t('mol.f.mz.Ni') },
             { symbol: 'Mi', meaning: t('mol.f.mz.Mi') },
           ]}
           note={t('mol.f.mz.note')}
-          reference="The z-average is weighted towards the heaviest chains, so it responds to a high-mass tail that Mw barely registers."
+          referenceNote={t('mol.f.mz.referenceNote')}
         />
         <Formula
           name={t('mol.f.mh.name')}
@@ -424,16 +425,17 @@ export default function MolecularPanel() {
             { symbol: 'a', meaning: t('mol.f.mh.a') },
           ]}
           note={t('mol.f.mh.note')}
-          reference="Mark-Houwink-Sakurada relation; K and a are tabulated per polymer-solvent-temperature combination in the Polymer Handbook. They are not universal constants."
+          referenceNote={t('mol.f.mh.referenceNote')}
         />
         <Formula
           name={t('mol.f.gpc.name')}
-          expression="log M = f(elution volume)   calibrated against narrow standards"
+          expression="log M = f(Ve)"
+          expressionNote={t('mol.f.gpc.expressionNote')}
           symbols={[
             { symbol: 'M', meaning: t('mol.f.gpc.M') },
           ]}
           note={t('mol.f.gpc.note')}
-          reference="Conventional GPC calibration assumes the sample and the standards have the same hydrodynamic volume at a given elution volume. Reporting the result as absolute molar mass without a light-scattering or viscometry detector overstates what the measurement supports."
+          referenceNote={t('mol.f.gpc.referenceNote')}
         />
         <Formula
           name={t('mol.f.log.name')}
@@ -446,7 +448,7 @@ export default function MolecularPanel() {
             { symbol: 'mu', meaning: t('mol.f.log.mu') },
           ]}
           note={t('mol.f.log.note')}
-          reference="Schulz-Zimm and log-normal distributions are the usual models for a SEC trace; the log-normal is used here because its Mw/Mn follows directly from sigma."
+          referenceNote={t('mol.f.log.referenceNote')}
         />
       </FormulaDisclosure>
     </div>

@@ -17,14 +17,34 @@ import { useI18n } from '../i18n/I18nContext';
  * `symbols` documents each symbol the expression uses. A formula whose
  * symbols are undefined is not reproducible, so this is required for any
  * expression with more than trivial notation.
+ *
+ * Why `reference` and `referenceNote` are separate props, and why only one of
+ * them goes through `t()`:
+ *
+ * A reference is two things glued together. "ASTM D638-22, Standard Test
+ * Method for Tensile Properties of Plastics" is a citation: a name that
+ * identifies a document, which a reader will search for verbatim. "Both
+ * require the modulus from the initial linear region" is prose, written for
+ * the person reading the page. They have opposite translation rules -- the
+ * citation must never be translated (a translated standard name retrieves
+ * nothing), and the prose must always be. Kept in one string they can only be
+ * translated together, so the prose was left in English on every page and the
+ * Portuguese page showed English paragraphs under a Portuguese heading.
+ *
+ * The same split applies to `expression` and `expressionNote`: the notation
+ * "E = Δσ / Δε" is the same in every language, while the parenthetical
+ * "(slope of the initial linear region)" is not.
  */
 export function Formula({
   name,
   expression,
+  expressionNote,
   symbols = [],
   reference,
+  referenceNote,
   note,
 }) {
+  const { t } = useI18n();
   return (
     <div className="formula">
       <div className="formula-head">
@@ -32,6 +52,9 @@ export function Formula({
       </div>
       <div className="formula-expression">
         <code>{expression}</code>
+        {expressionNote ? (
+          <span className="formula-expression-note"> {expressionNote}</span>
+        ) : null}
       </div>
       {symbols.length > 0 ? (
         <dl className="formula-symbols">
@@ -44,9 +67,14 @@ export function Formula({
         </dl>
       ) : null}
       {note ? <p className="formula-note">{note}</p> : null}
-      {reference ? (
+      {reference || referenceNote ? (
         <p className="formula-reference">
-          <span className="formula-reference-label">Ref.</span> {reference}
+          <span className="formula-reference-label">{t('common.ref')}</span>{' '}
+          {reference ? <span className="formula-citation">{reference}</span> : null}
+          {reference && referenceNote ? ' ' : null}
+          {referenceNote ? (
+            <span className="formula-reference-note">{referenceNote}</span>
+          ) : null}
         </p>
       ) : null}
     </div>

@@ -454,40 +454,46 @@ export default function ThermalPanel() {
             { symbol: 'T', meaning: t('thermal.f.dtg.T') },
           ]}
           note={t('thermal.f.dtg.note')}
-          reference="ASTM E1131-20, Standard Test Method for Compositional Analysis by Thermogravimetry. The DTG is the first derivative of the mass loss curve; its maximum is the temperature of greatest decomposition rate."
+          reference="ASTM E1131-20, Standard Test Method for Compositional Analysis by Thermogravimetry."
+          referenceNote={t('thermal.f.dtg.referenceNote')}
         />
         <Formula
           name={t('thermal.f.td.name')}
-          expression="Td(x%) : the T where m(T) = 100 − x   (linear interpolation)"
+          expression="Td(x%): m(T) = 100 − x"
+          expressionNote={t('thermal.f.td.expressionNote')}
           symbols={[
             { symbol: 'x', meaning: t('thermal.f.td.x') },
             { symbol: 'm', meaning: t('thermal.f.td.m') },
           ]}
           note={t('thermal.f.td.note')}
-          reference="ISO 11358-1:2022, Plastics — Thermogravimetry (TG) of polymers — Part 1: General principles. Defines the onset temperature by the mass-loss criterion and the extrapolated tangent."
+          reference="ISO 11358-1:2022, Plastics — Thermogravimetry (TG) of polymers — Part 1: General principles."
+          referenceNote={t('thermal.f.td.referenceNote')}
         />
         <Formula
           name={t('thermal.f.res.name')}
           expression="residue (%) = m(T_final)"
           symbols={[{ symbol: 'm', meaning: t('thermal.f.res.mf') }]}
           note={t('thermal.f.res.note')}
-          reference="ISO 11358-1:2022 (residue determination). The residue includes any inorganic filler, ash or char, so it is an upper bound on the filler content, not a measurement of it."
+          reference="ISO 11358-1:2022 (residue determination)."
+          referenceNote={t('thermal.f.res.referenceNote')}
         />
         <Formula
           name={t('thermal.f.smooth.name')}
-          expression="m_smooth(T) = (1/w) Σ m(T_i)   over a window of w points, edge-padded"
+          expression="m_smooth(T) = (1/w) Σ m(T_i)"
+          expressionNote={t('thermal.f.smooth.expressionNote')}
           symbols={[{ symbol: 'w', meaning: t('thermal.f.smooth.w') }]}
           note={t('thermal.f.smooth.note')}
-          reference="A moving-average filter is the usual pre-treatment for a DTG curve (ISO 11358-1:2022, which permits smoothing provided its parameters are reported). It is a low-pass filter, so it suppresses sharp features along with the noise: widening w flattens a narrow decomposition step, and the smoothed curve must never be the one the residue is read from."
+          referenceNote={t('thermal.f.smooth.referenceNote')}
         />
         <Formula
           name={t('thermal.f.uniform.name')}
-          expression="DTG computed on a uniform 1 °C grid after interpolation"
+          expression="ΔT = 1 °C"
+          expressionNote={t('thermal.f.uniform.expressionNote')}
           symbols={[
             { symbol: 'DTG', meaning: t('thermal.f.uniform.dtg') },
           ]}
           note={t('thermal.f.uniform.note')}
-          reference="ISO 11358-1:2022 requires the rate of mass loss to be reported against temperature on a defined basis. A finite difference taken on the raw, unevenly spaced axis is dominated by the shortest intervals — one noisy pair a hundredth of a degree apart yields a gradient of tens of percent per degree — so the trace is resampled onto a uniform grid first. The choice of grid step is then reported, because it sets the resolution of every DTG peak that follows."
+          referenceNote={t('thermal.f.uniform.referenceNote')}
         />
         <Formula
           name={t('thermal.f.dscpeak.name')}
@@ -498,7 +504,8 @@ export default function ThermalPanel() {
             { symbol: 'β', meaning: t('thermal.f.dscpeak.beta') },
           ]}
           note={t('thermal.f.dscpeak.note')}
-          reference="ASTM E793-06(2018), Standard Test Method for Enthalpies of Fusion and Crystallization by DSC. The peak area is bounded by a baseline drawn between the flanks of the transition."
+          reference="ASTM E793-06(2018), Standard Test Method for Enthalpies of Fusion and Crystallization by DSC."
+          referenceNote={t('thermal.f.dscpeak.referenceNote')}
         />
         <Formula
           name={t('thermal.f.xc.name')}
@@ -508,7 +515,8 @@ export default function ThermalPanel() {
             { symbol: 'ΔHm°', meaning: t('thermal.f.xc.Hm0') },
           ]}
           note={t('thermal.f.xc.note')}
-          reference="Kong & Hay, 'The measurement of the crystallinity of polymers by DSC', Polymer 43 (2002) 3873–3878. Xc from DSC is a mass fraction, and is only as good as ΔHm°."
+          reference="Kong & Hay, 'The measurement of the crystallinity of polymers by DSC', Polymer 43 (2002) 3873–3878."
+          referenceNote={t('thermal.f.xc.referenceNote')}
         />
       </FormulaDisclosure>
     </div>

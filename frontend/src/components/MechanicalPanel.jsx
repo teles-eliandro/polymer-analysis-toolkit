@@ -201,25 +201,29 @@ export default function MechanicalPanel() {
       <FormulaDisclosure>
         <Formula
           name={t('mech.f.young.name')}
-          expression="E = Δσ / Δε   (slope of the initial linear region)"
+          expression="E = Δσ / Δε"
+          expressionNote={t('mech.f.young.expressionNote')}
           symbols={[
             { symbol: 'E', meaning: t('mech.f.young.E') },
             { symbol: 'σ', meaning: t('mech.f.young.sigma') },
             { symbol: 'ε', meaning: t('mech.f.young.epsilon') },
           ]}
           note={t('mech.f.young.note')}
-          reference="ASTM D638-22, Standard Test Method for Tensile Properties of Plastics; ISO 527-1:2019. Both require the modulus from the initial linear region, and neither permits a modulus quoted without the strain range it was fitted over."
+          reference="ASTM D638-22, Standard Test Method for Tensile Properties of Plastics; ISO 527-1:2019."
+          referenceNote={t('mech.f.young.referenceNote')}
         />
         <Formula
           name={t('mech.f.fit.name')}
-          expression="E = Σ(εi − ε̄)(σi − σ̄) / Σ(εi − ε̄)²   (least squares)"
+          expression="E = Σ(εi − ε̄)(σi − σ̄) / Σ(εi − ε̄)²"
+          expressionNote={t('mech.f.fit.expressionNote')}
           symbols={[
             { symbol: 'E', meaning: t('mech.f.fit.E') },
             { symbol: 'εi', meaning: t('mech.f.fit.eps') },
             { symbol: 'σi', meaning: t('mech.f.fit.sig') },
           ]}
           note={t('mech.f.fit.note')}
-          reference="ISO 527-1:2019, determination of tensile modulus. The standard fits the slope over a defined strain window (typically 0.05 % to 0.25 %) rather than the whole curve, because the toe region at the start of the test is seating compliance, not material stiffness."
+          reference="ISO 527-1:2019, determination of tensile modulus."
+          referenceNote={t('mech.f.fit.referenceNote')}
         />
         <Formula
           name={t('mech.f.sigma.name')}
@@ -230,18 +234,21 @@ export default function MechanicalPanel() {
             { symbol: 'L₀', meaning: t('mech.f.sigma.L0') },
           ]}
           note={t('mech.f.sigma.note')}
-          reference="ISO 527-1:2019 (definitions of stress and strain). The original cross-section is used throughout; engineering stress, not true stress."
+          reference="ISO 527-1:2019 (definitions of stress and strain)."
+          referenceNote={t('mech.f.sigma.referenceNote')}
         />
         <Formula
           name={t('mech.f.toughness.name')}
-          expression="U = ∫ σ dε   (area under the stress-strain curve)"
+          expression="U = ∫ σ dε"
+          expressionNote={t('mech.f.toughness.expressionNote')}
           symbols={[
             { symbol: 'U', meaning: t('mech.f.toughness.U') },
             { symbol: 'σ', meaning: t('mech.f.toughness.sig') },
             { symbol: 'ε', meaning: t('mech.f.toughness.eps') },
           ]}
           note={t('mech.f.toughness.note')}
-          reference="ASTM D638-22, Annex on energy at break. The area is integrated over the strain range supplied, so a truncated curve underestimates toughness."
+          reference="ASTM D638-22, Annex on energy at break."
+          referenceNote={t('mech.f.toughness.referenceNote')}
         />
       </FormulaDisclosure>
     </div>
