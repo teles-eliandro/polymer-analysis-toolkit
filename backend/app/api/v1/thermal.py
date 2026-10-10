@@ -5,7 +5,7 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 
 from app.api.v1.schemas import (
     DSCResult,
@@ -25,6 +25,40 @@ from app.core.crystallinity_ref import options as crystallinity_options
 from app.core.structure import analyse_ftir
 from app.core.thermal import analyse_dsc, analyse_tga
 from app.core.trace_io import TraceImportError, read_trace_file, resolve_trace
+
+#: The languages the interface offers. The backend's own prose is authored in
+#: Portuguese; ``lang`` picks a translation of the fields that are *wording*
+#: -- polymer names, crystal forms, notes, warnings. Citations are never
+#: translated, in any language: a citation is a claim about a specific
+#: document, and a translated one cannot be found by whoever looks it up.
+SUPPORTED_LANGUAGES = ("pt", "en", "es")
+
+_LANG_QUERY = Query(
+    "pt",
+    pattern="^(pt|en|es)$",
+    description=(
+        "Language for prose and labels (polymer names, crystal forms, notes, "
+        "warnings). Citations are never translated. Defaults to Portuguese, "
+        "the source language of the database."
+    ),
+)
+
+#: The note above the reference table. Keyed by language rather than resolved
+#: from a module, because it is one sentence and not a database field.
+_REF_TABLE_NOTE = {
+    "pt": (
+        "Xc (%) = ΔHm / ΔHf100 × 100. O valor de ΔHf100 é específico do "
+        "polímero e da forma cristalina. Prefira 'verified' quando houver."
+    ),
+    "en": (
+        "Xc (%) = ΔHm / ΔHf100 × 100. The ΔHf100 value is specific to the "
+        "polymer and to its crystal form. Prefer 'verified' where one exists."
+    ),
+    "es": (
+        "Xc (%) = ΔHm / ΔHf100 × 100. El valor de ΔHf100 es específico del "
+        "polímero y de la forma cristalina. Prefiera 'verified' cuando exista."
+    ),
+}
 
 router = APIRouter(prefix="/thermal", tags=["Thermal Analysis"])
 
@@ -492,7 +526,9 @@ async def dsc_endpoint(payload: DSCTraceInput) -> DSCResult:
         "Values the literature reports differently appear as 'alternatives'."
     ),
 )
-async def crystallinity_references() -> dict[str, object]:
+async def crystallinity_references(
+    lang: str = _LANG_QUERY,
+) -> dict[str, object]:
     """
     The internal database that fills the reference-enthalpy field.
 
@@ -513,9 +549,6 @@ async def crystallinity_references() -> dict[str, object]:
     fill the value automatically from the sample name in the instrument file.
     """
     return {
-        "note": (
-            "Xc (%) = ΔHm / ΔHf100 × 100. O valor de ΔHf100 é específico do "
-            "polímero e da forma cristalina. Prefira 'verified' quando houver."
-        ),
-        "references": crystallinity_options(),
+        "note": _REF_TABLE_NOTE.get(lang, _REF_TABLE_NOTE["pt"]),
+        "references": crystallinity_options(lang),
     }

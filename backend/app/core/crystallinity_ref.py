@@ -47,6 +47,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from app.core import crystallinity_ref_i18n as i18n
+
 
 @dataclass(frozen=True)
 class CrystallinityReference:
@@ -779,13 +781,19 @@ def lookup(name: str | None) -> PolymerEnthalpy | None:
     return None
 
 
-def options() -> list[dict[str, object]]:
+def options(lang: str = "pt") -> list[dict[str, object]]:
     """
     A lista para o menu do formulário: valor, forma cristalina e citação.
 
     Devolve o valor **com a fonte junto**, porque é isso que o campo precisa
     carregar. Um menu que entrega só o número convida a usá-lo sem a citação,
     e o número sozinho não é verificável.
+
+    ``lang`` seleciona os campos que são *redação*: o nome do polímero, a forma
+    cristalina e as notas. ``source`` não é traduzido em nenhum idioma -- é a
+    citação literal de um documento, e uma citação traduzida não é encontrável
+    por quem for buscar o artigo. O português é o idioma de origem do banco e
+    serve de fallback para qualquer chave que ainda não tenha tradução.
     """
     out: list[dict[str, object]] = []
     for entry in ENTHALPY_DB.values():
@@ -793,23 +801,23 @@ def options() -> list[dict[str, object]]:
         out.append(
             {
                 "key": entry.key,
-                "label": entry.display_name,
+                "label": i18n.display_name(entry.key, lang, entry.display_name),
                 "names": list(entry.names),
                 "value_J_g": prim.value_J_g if prim else None,
-                "crystal_form": prim.crystal_form if prim else None,
+                "crystal_form": i18n.crystal_form(prim.crystal_form if prim else None, lang),
                 "source": prim.source if prim else None,
                 "confidence": prim.confidence if prim else None,
                 "copolymer": entry.copolymer,
-                "note": entry.note,
+                "note": i18n.note(f"{entry.key}.poly", lang, entry.note),
                 "alternatives": [
                     {
                         "value_J_g": r.value_J_g,
                         "source": r.source,
-                        "crystal_form": r.crystal_form,
+                        "crystal_form": i18n.crystal_form(r.crystal_form, lang),
                         "confidence": r.confidence,
-                        "note": r.note,
+                        "note": i18n.note(f"{entry.key}.ref{i + 1}", lang, r.note),
                     }
-                    for r in entry.references[1:]
+                    for i, r in enumerate(entry.references[1:])
                 ],
             }
         )

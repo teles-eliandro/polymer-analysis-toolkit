@@ -33,7 +33,7 @@ function TraceInput({ label, hint, placeholder, value, onChange }) {
 }
 
 export default function ThermalPanel() {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const [mode, setMode] = useState('tga');
 
   const [tgaText, setTgaText] = useState('');
@@ -75,7 +75,10 @@ export default function ThermalPanel() {
   useEffect(() => {
     if (typeof thermalApi.crystallinityReferences !== 'function') return undefined;
     let cancelled = false;
-    const pending = thermalApi.crystallinityReferences();
+    // ``language`` is a dependency, not just an argument: without it here, an
+    // analysis run in Portuguese would keep showing Portuguese names after the
+    // user switched to English, because the fetch never re-ran.
+    const pending = thermalApi.crystallinityReferences(language);
     if (!pending || typeof pending.then !== 'function') return undefined;
     pending
       .then((res) => {
@@ -85,7 +88,7 @@ export default function ThermalPanel() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [language]);
 
   /**
    * The chosen entry, so its citation can be shown under the field.

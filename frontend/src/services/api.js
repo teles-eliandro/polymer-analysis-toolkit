@@ -148,9 +148,15 @@ export const thermalApi = {
    * with the source attached instead of typed as a bare number. The polymer
    * is also resolved from the sample name in the file by the server, so
    * filling this in is optional rather than required.
+   *
+   * ``lang`` is sent because the database's own text -- polymer names, crystal
+   * forms, notes -- is authored in Portuguese and the endpoint now returns it
+   * in the requested language. ``source`` comes back as the literal citation
+   * in every language, on purpose. Without the parameter the whole table
+   * rendered Portuguese inside an English or Spanish interface.
    */
-  crystallinityReferences: () =>
-    http.get('/api/v1/thermal/crystallinity-references'),
+  crystallinityReferences: (lang) =>
+    http.get('/api/v1/thermal/crystallinity-references', { params: { lang } }),
 };
 
 export const mechanicalApi = {
