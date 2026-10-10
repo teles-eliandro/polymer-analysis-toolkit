@@ -6,10 +6,17 @@
 # app package is importable as `app`, not as `backend.app`. The service never
 # came up. The start command below matches the PYTHONPATH that is set, and is
 # the same invocation used locally and in CI.
+#
+# The `name` below must match the live service, whose URL is
+# https://polymer-analysis-toolkit.onrender.com. It previously read
+# `pat-backend`, which is a *different* hostname; a Blueprint sync against that
+# name would create a second, duplicate service on the account. The frontend
+# calls the hostname above, so a divergent name here is a silent trap rather
+# than a visible failure. Keep the two in step.
 
 services:
   - type: web
-    name: pat-backend
+    name: polymer-analysis-toolkit
     runtime: python
     plan: free
     region: oregon

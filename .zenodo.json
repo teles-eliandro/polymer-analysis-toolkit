@@ -1,0 +1,73 @@
+{
+  "title": "Polymer Analysis Toolkit: characterisation analysis that states its own limits",
+  "description": "<p>Polymer Analysis Toolkit (PAT) is an open-source web application that computes molecular, thermal, mechanical, rheological and structural properties of polymers from data that laboratories already produce: GPC/SEC, DSC, TGA, tensile stress-strain, rheology frequency sweeps, XRD patterns and FTIR spectra.</p>\n\n<p>The accompanying paper (<code>docs/README.md</code> in the repository) documents what the tool computes, how each result was verified against published values, and — in more detail than is customary — what could not be verified. Verification ran against a certified NIST reference, three open Zenodo datasets and four raw figshare datasets published by a single laboratory, on the principle that a value recalled from memory is not a citation.</p>\n\n<p><strong>The central finding is a failure pattern, not an arithmetic error.</strong> In every module tested, the analysis accepted an input that was not physically what the code assumed — a transmittance spectrum where absorbance was expected, a heat-flow trace whose endotherm pointed down, a thermogravimetric trace ending at negative mass — and returned a confident number rather than refusing. A real instrument trace returned HTTP 500 through the analysis endpoint while 149 tests built on synthetic data passed; the cause was unmeasurable peaks serialised as NaN. These defects are structurally invisible to internally consistent test data, because tests generate data with the same assumptions as the code.</p>\n\n<p>Results are reported only when their inputs exist; the method and its limits travel with each number, including when the answer is \"not determined\". The limits that remain unresolved are recorded in the suite as strict xfails, so an unexpected pass fails the build and forces the claim to be revisited rather than decaying unnoticed. Where the tool once reported a melting temperature for amorphous polystyrene — which has no melting transition — it now omits the quantity instead of guessing.</p>\n\n<p>Two specific defects are documented with their measured evidence. On a real PLLA trace the melting search inferred the wrong signal polarity and anchored on the instrument's start-up transient, reporting the same melting point (<code>&#8722;90.06 &#176;C</code>) for six chemically distinct polymers; after correcting the polarity, melting temperatures fall inside the literature window in <strong>52 of 58</strong> files that report one. Separately, a peak area integrated over temperature carried units of W/g&#183;&#176;C and was reported as an enthalpy in J/g, yielding 10.19 J/g against the correct 61.17 J/g — a crystallinity of 11 % where the answer is 65.8 %, and a value ordinary enough not to invite a second look.</p>\n\n<p><strong>Suite:</strong> 436 backend tests passing (3 xfailed, strict), 95 frontend tests passing, lint clean. <strong>Licence:</strong> MIT. Python 3.11 / FastAPI backend, React frontend.</p>",
+  "creators": [
+    {
+      "name": "Teles, Eliandro P."
+    }
+  ],
+  "upload_type": "software",
+  "publication_date": "2026-10-10",
+  "access_right": "open",
+  "license": "mit",
+  "version": "1.0.0",
+  "language": "eng",
+  "keywords": [
+    "polymer characterization",
+    "differential scanning calorimetry",
+    "thermogravimetric analysis",
+    "FTIR",
+    "XRD",
+    "gel permeation chromatography",
+    "materials science",
+    "scientific software",
+    "software verification"
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "https://polymer-analysis-toolkit.vercel.app",
+      "relation": "isSupplementedBy",
+      "scheme": "url"
+    },
+    {
+      "identifier": "10.6084/m9.figshare.24462004",
+      "relation": "references",
+      "scheme": "doi"
+    },
+    {
+      "identifier": "10.6084/m9.figshare.24593022",
+      "relation": "references",
+      "scheme": "doi"
+    },
+    {
+      "identifier": "10.6084/m9.figshare.24595695",
+      "relation": "references",
+      "scheme": "doi"
+    },
+    {
+      "identifier": "10.5281/zenodo.17306416",
+      "relation": "references",
+      "scheme": "doi"
+    },
+    {
+      "identifier": "10.5281/zenodo.17288962",
+      "relation": "references",
+      "scheme": "doi"
+    },
+    {
+      "identifier": "10.5281/zenodo.17293641",
+      "relation": "references",
+      "scheme": "doi"
+    },
+    {
+      "identifier": "10.5281/zenodo.20466241",
+      "relation": "references",
+      "scheme": "doi"
+    },
+    {
+      "identifier": "10.6028/nist.ir.6091",
+      "relation": "references",
+      "scheme": "doi"
+    }
+  ]
+}

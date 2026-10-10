@@ -1381,6 +1381,44 @@ is what keeps a missing reference from being reported as a disagreement.
     delimiter and decimal mark, a latin-1 degree sign, `#EXO:-1` and the
     heating rate in `#RANGE`.
 
+## 7. Availability and citation
+
+The code, the verification scripts and the recorded output are at
+<https://github.com/teles-eliandro/polymer-analysis-toolkit>. The tool runs at
+<https://polymer-analysis-toolkit.vercel.app> — free-tier hosting, so the first
+request after an idle period takes roughly 30–60 s to wake, and the wake is
+declared in the interface rather than left to look like a failure.
+
+Citation metadata is versioned **in the repository**, so a citation generated
+from any of the standard surfaces resolves to the same record:
+
+| File | Read by |
+|---|---|
+| `CITATION.cff` | GitHub's "Cite this repository" button; Zenodo as a fallback |
+| `.zenodo.json` | Zenodo, on archiving — **takes precedence** over `CITATION.cff` when both exist |
+| `AUTHORSHIP.md` | humans — the author and the AI-assistance declaration |
+
+`CITATION.cff` validates against CFF schema 1.2.0 (`cffconvert --validate`).
+The licence is MIT, in `LICENSE`.
+
+Two statements a reader needs in order to weigh the work, both elaborated in
+`AUTHORSHIP.md`: the author declares **no institutional affiliation**, because
+the work was produced outside any current appointment or enrolment; and the AI
+assistance that wrote the implementation and drafted this document is **declared
+and credited, not listed as an author**, which neither arXiv nor COPE permits.
+
+**Status of the persistent identifier.** The repository is prepared for
+archiving — metadata validated, licence present, release notes written. The DOI
+itself has **not** been minted at the time of writing, and none is claimed here.
+Zenodo mints it on the webhook that fires when a release is created *after* the
+repository's archiving toggle is enabled; a release cut before that is silently
+skipped. Until the archived record exists, the identifier for this work is the
+tagged release commit.
+
+---
+
 ## Licence
 
 MIT. Source: <https://github.com/teles-eliandro/polymer-analysis-toolkit>
+
+Copyright © 2026 Eliandro P. Teles. See [`LICENSE`](../LICENSE).

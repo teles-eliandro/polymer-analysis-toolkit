@@ -1,0 +1,39 @@
+cff-version: 1.2.0
+message: "If you use this software, or the verification results it documents, please cite it as below."
+title: "Polymer Analysis Toolkit: characterisation analysis that states its own limits"
+abstract: >-
+  PAT is an open-source web application that computes molecular, thermal,
+  mechanical, rheological and structural properties of polymers from data
+  laboratories already produce (GPC/SEC, DSC, TGA, tensile, rheology, XRD,
+  FTIR). This record documents what the tool computes, how each result was
+  verified against published values, and — in more detail than is customary —
+  what could not be verified. Verification ran against a certified reference,
+  three open Zenodo datasets and four raw figshare datasets from a single
+  laboratory. The central finding is a failure pattern rather than an
+  arithmetic error: in every module tested the analysis accepted an input that
+  was not physically what the code assumed — a transmittance spectrum where
+  absorbance was expected, a heat-flow trace whose endotherm pointed down, a
+  thermogravimetric trace ending at negative mass — and returned a confident
+  number instead of refusing. These defects were invisible to internally
+  consistent synthetic tests. The limits that remain unresolved are recorded in
+  the test suite as strict xfails, so that an unexpected pass fails the build.
+authors:
+  - family-names: Teles
+    given-names: "Eliandro P."
+version: 1.0.0
+date-released: "2026-10-10"
+license: MIT
+type: software
+repository-code: "https://github.com/teles-eliandro/polymer-analysis-toolkit"
+url: "https://polymer-analysis-toolkit.vercel.app"
+keywords:
+  - polymer characterization
+  - differential scanning calorimetry
+  - thermogravimetric analysis
+  - FTIR
+  - XRD
+  - gel permeation chromatography
+  - materials science
+  - scientific software
+  - software verification
+  - open science

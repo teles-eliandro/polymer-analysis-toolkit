@@ -4,6 +4,12 @@
 [![Licence](https://img.shields.io/badge/Licence-MIT-blue)](LICENSE)
 [![CI](https://github.com/teles-eliandro/polymer-analysis-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/teles-eliandro/polymer-analysis-toolkit/actions/workflows/ci.yml)
 
+> **Try it live:** <https://polymer-analysis-toolkit.vercel.app> — pick a module,
+> load one of the example datasets, press analyse. No signup.
+> The API is on free-tier hosting, so **the first request after an idle period
+> takes ~30–60 s to wake**; the interface says so while it waits. A slow first
+> load is the host waking, not a failure.
+
 **Polymer Analysis Toolkit (PAT)** is an open-source web application that helps
 researchers, engineers and students in materials science analyse the
 characterisation data they already collect — without writing any code.
@@ -265,6 +271,37 @@ curl -s https://<your-app>.vercel.app/static/js/main.*.js \
 
 ## 📄 Licence
 
-MIT.
+MIT — see [`LICENSE`](LICENSE).
 
-Developed by **Eliandro P. Teles**.
+Developed by **Eliandro P. Teles**. No institutional affiliation is declared:
+the work was produced outside any current appointment or enrolment.
+
+## 📚 Citing this work
+
+Citation metadata is versioned here, so the standard surfaces all resolve to the
+same record:
+
+- [`CITATION.cff`](CITATION.cff) — GitHub's **Cite this repository** button
+  (validates against CFF schema 1.2.0)
+- [`.zenodo.json`](.zenodo.json) — used by Zenodo when the repository is archived
+  (it takes precedence over `CITATION.cff` there)
+
+Until the archived record exists, cite the repository URL and the release tag.
+A DOI is **not** claimed before one is minted.
+
+## 🤖 AI assistance
+
+The implementation, the verification runs and the drafting of the paper were
+carried out with an AI coding agent (Hermes Agent, Nous Research) used as a tool
+under the author's direction. It is credited, **not listed as an author** —
+neither arXiv nor COPE permits AI authorship. Full statement, including the one
+hypothesis of the assistant's that the data refuted, in
+[`AUTHORSHIP.md`](AUTHORSHIP.md).
+
+## 📖 The paper
+
+[`docs/README.md`](docs/README.md) is the technical write-up: what each module
+computes, how every result was verified against published values, the seventeen
+defect records (§3), and — at more length than is customary — **what could not be
+verified** and why (§4). If you use the tool, cite the paper; it is the version of
+record for the numbers.
