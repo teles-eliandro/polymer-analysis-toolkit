@@ -296,6 +296,13 @@ async def analyse_trace_endpoint(
             resolved.y,
             heating_rate=resolved.heating_rate,
             ref_enthalpy_J_g=ref_value,
+            # The trace came through ``resolve_trace``, which normalises an
+            # exothermic-up header to the endothermic-up convention the
+            # analysis uses. So a melting endotherm is known to point up, and
+            # the peak search must not be free to look for a larger excursion
+            # in the other direction -- on the 10 K PLLA file that freedom
+            # returned the cold-crystallisation exotherm as the melting point.
+            polarity_known=resolved.exothermic_direction is not None,
         )
     elif target_key == "ftir":
         # Análise de FTIR: o leitor já entregou número de onda e absorbância

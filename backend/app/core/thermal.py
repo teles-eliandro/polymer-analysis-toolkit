@@ -1109,7 +1109,9 @@ def _local_maxima_mask(z: np.ndarray, order: int) -> np.ndarray:
     return z >= windows.max(axis=1)
 
 
-def _find_peak_temperature(T: np.ndarray, y: np.ndarray) -> int | None:
+def _find_peak_temperature(
+    T: np.ndarray, y: np.ndarray, *, search_both_polarities: bool = True
+) -> int | None:
     """
     Index of the most prominent *peak* (a transient excursion that returns to
     the baseline), used to locate melting and crystallisation events.
@@ -1120,6 +1122,25 @@ def _find_peak_temperature(T: np.ndarray, y: np.ndarray) -> int | None:
     the scan is NOT adequate for this: it is not the peak baseline, and on a
     real PCL scan it made the melting enthalpy come out at 340 J/g against a
     physical maximum of 139.5 J/g.
+
+    ``search_both_polarities`` is the fix for a defect that made this function
+    return cold crystallisation as the melting point, and it defaults to true
+    only because a direct caller may hand in a signal whose convention is
+    genuinely unknown. When the caller *knows* the trace is endothermic-up --
+    which ``analyse_dsc`` does, because ``resolve_trace`` normalises it from
+    the file header -- searching both polarities is not a safety net, it is a
+    hazard: on ``DSC_PLLA_10K_2nd_heating`` the negated branch scores the
+    cold-crystallisation exotherm at 85.3 C (prominence 1.381) above the real
+    melting endotherm at 167.4 C (prominence 1.141), so the melting point was
+    reported 82 C low. The search found the larger excursion, and the larger
+    excursion was not the melting peak.
+
+    Narrowing the prominence window does not rescue the inference: measured at
+    windows from 1 C to 20 C of scan, the negated branch wins at every one.
+    That is the same finding as section 4 item 4 -- a cold-crystallisation
+    exotherm and a melting endotherm have arbitrary and overlapping
+    magnitudes, so no threshold separates them. The convention is a property of
+    the file and has to come from the file.
     """
     n = T.size
     if n < 5:
@@ -1187,7 +1208,14 @@ def _find_peak_temperature(T: np.ndarray, y: np.ndarray) -> int | None:
     best: int | None = None
     best_sign = 1.0
     best_prom = 0.0
-    for sign, z in ((1.0, z_plus), (-1.0, z_minus)):
+    # Only the stored polarity when the caller knows the convention. Trying both
+    # and keeping the larger excursion is an inference, and an inference about
+    # polarity is what section 4 item 6 says cannot be made from shape: the
+    # cold-crystallisation exotherm on the 10 K PLLA trace outscores the real
+    # melting endotherm in the negated branch, so the "more prominent" rule
+    # reported a crystallisation event as the melting point.
+    branches = ((1.0, z_plus), (-1.0, z_minus)) if search_both_polarities else ((1.0, z_plus),)
+    for sign, z in branches:
         apex_mask = _local_maxima_mask(z, order)
         for i in np.flatnonzero(apex_mask):
             if i < order or i >= n - order:
@@ -1719,6 +1747,7 @@ def analyse_dsc(
     heating_rate: float | None = None,
     ref_enthalpy_J_g: float | None = None,
     smooth_window: int = 11,
+    polarity_known: bool = False,
 ) -> DSCResult:
     """
     Analyse a DSC trace.
@@ -1737,6 +1766,28 @@ def analyse_dsc(
         polymer, in J/g. When given, the degree of crystallinity is computed
         per ASTM D3418 / ISO 11357-3 as
         ``Xc = 100 * delta_Hm / ref_enthalpy_J_g``.
+    polarity_known : bool, default False
+        Whether the caller has established that endothermic events point
+        *upward* in ``heat_flow`` -- true when ``resolve_trace`` has already
+        normalised the signal from the file's own declaration (``#EXO``).
+
+        When true the melting search considers only the upward direction, which
+        is the only direction a melting endotherm can be in. When false both
+        directions are tried and the more prominent excursion wins, which is
+        the behaviour this argument exists to make optional: on the 10 K PLLA
+        trace that rule reports the cold-crystallisation exotherm at 85.3 C as
+        the melting point, because its prominence (1.381) exceeds the real
+        endotherm's (1.141). See section 4 item 6.
+
+        The default is **False**, deliberately: a caller that has not
+        established the convention must not be assumed to know it, and getting
+        this wrong in the permissive direction risks a melting point 80 C off
+        while getting it wrong in the conservative direction costs nothing
+        more than the older inference. Callers that *do* know -- the HTTP path,
+        which normalises through ``resolve_trace`` -- pass True explicitly.
+        Callers holding a raw instrument trace that has not been through
+        ``resolve_trace`` should leave it False and accept the inference,
+        which is what it is.
 
     Notes
     -----
@@ -1762,9 +1813,22 @@ def analyse_dsc(
     )
 
     # ---- Melting endotherm (found first: it defines what to exclude) --------
-    # The melting peak is the largest transient excursion above the baseline
+    # The melting peak is the largest transient excursion *above* the baseline
     # joining the ends of the scan.
-    tm_idx = _find_peak_temperature(T, hf_s)
+    #
+    # Whether the search is allowed to consider the downward direction as well
+    # is decided by ``polarity_known``, and that argument is the fix for a
+    # defect that had this function reporting crystallisation as melting. The
+    # signal reaching here has already been normalised to endothermic-up by
+    # ``resolve_trace`` when the file declared its convention, so a melting
+    # endotherm points up and only up. Searching both directions anyway means
+    # choosing the larger excursion, and on ``DSC_PLLA_10K_2nd_heating`` the
+    # larger excursion is the cold-crystallisation exotherm at 85.3 C
+    # (prominence 1.381 against the real endotherm's 1.141): the tool reported
+    # Tm 82 C low, on the number the whole scan is run to obtain.
+    tm_idx = _find_peak_temperature(
+        T, hf_s, search_both_polarities=not polarity_known
+    )
     melt_range: tuple[float, float] | None = None
     if tm_idx is not None:
         result.Tm = float(T[tm_idx])
@@ -1833,8 +1897,26 @@ def analyse_dsc(
                     # gives J/g. This is exact only when the x-axis is time,
                     # which is why the rate is required.
                     area = area / (heating_rate / 60.0)
-                result.delta_Hm = abs(area)
-                if ref_enthalpy_J_g and ref_enthalpy_J_g > 0:
+                    result.delta_Hm = abs(area)
+                else:
+                    # Without the rate the integral is an area in W/g * degC,
+                    # which is NOT an enthalpy and cannot be converted into one
+                    # from the trace alone. It used to be reported as
+                    # ``delta_Hm`` anyway: on ``DSC_PLLA_10K_2nd_heating`` that
+                    # produced "61.2 J/g" with the rate and "10.19 J/g" without
+                    # it, and the crystallinity followed the same number, 66 %
+                    # against 11 %. Both look like results.
+                    #
+                    # Refusing is the only defensible option. The value is not
+                    # approximately right and there is no bound to state -- the
+                    # missing factor is the scan rate, which can be anything
+                    # from 1 to 40 K/min -- so reporting it either scaled or
+                    # unscaled would be inventing a number. The peak position
+                    # does not need the rate and is still reported, with the
+                    # reason it has no enthalpy attached.
+                    result.delta_Hm = None
+                    result.crystallinity_pct = None
+                if result.delta_Hm is not None and ref_enthalpy_J_g and ref_enthalpy_J_g > 0:
                     xc = 100.0 * result.delta_Hm / ref_enthalpy_J_g
                     result.crystallinity_pct = xc
                     if xc > 100.0:

@@ -209,7 +209,7 @@ logs a warning to the console. Always set it in the hosting environment.
 ## ✅ Tests
 
 ```bash
-cd backend  && .venv/bin/python -m pytest     # 428 passed, 3 xfailed
+cd backend  && .venv/bin/python -m pytest     # 436 passed, 3 xfailed
 cd frontend && CI=true npx react-scripts test --watchAll=false   # 95 passed, 11 suites
 ```
 

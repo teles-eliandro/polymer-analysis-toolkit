@@ -63,7 +63,25 @@ defensible-looking statement about the wrong substance. It was found by typing
 a name into the running application; all 332 tests passed while it was present,
 because the resolver had no test asserting a name it should **refuse**.
 
----
+A sixth round did not run new data through the tool; it went back and checked a
+claim this document had already made. §4 item 5 recorded that inverted signal
+polarity corrupted the melting enthalpy by two orders of magnitude, and that
+claim had never been reproduced against a real trace. Reproducing it showed
+something else entirely: the polarity *inference* was selecting the wrong
+thermal event. On `DSC_PLLA_10K_2nd_heating`, a trace that is endothermic-up
+and says so, the tool reported its melting point as **85.4 °C** — the
+cold-crystallisation exotherm — with no enthalpy at all, while the real melting
+endotherm sat at 167.4 °C. It now reports 167.4 °C and 61.2 J/g, against the
+61.7 J/g published for that file.
+
+Two things about this round are worth more than the fix. The recorded failure
+mode was more interesting than the real one, which is why it went unexamined
+for so long: a diagnosis is a claim like any other. And when the missing
+enthalpy was finally noticed, the first fix assumed the enthalpy was merely
+mis-scaled and made it *worse* — a confident crystallinity of 39 % computed at
+a crystallisation peak, which is a more dangerous answer than no answer. It was
+caught by checking the result against the published table rather than against
+the value the change was trying to produce.
 
 ## 1. Scope
 
@@ -1004,6 +1022,105 @@ Test coverage: **20 new tests** (11 parametrised derivations, plus the adopted
 set, the range witnesses and the lookup fix). **428 backend tests passing**,
 3 xfailed, lint clean, frontend 95 passing.
 
+### 3.16 A melting point that was a crystallisation exotherm
+
+`_find_peak_temperature` tries both signal polarities and keeps the more
+prominent excursion, because the stored convention differs between instruments
+and exports. On a trace that contains **cold crystallisation as well as
+melting**, the larger excursion is not necessarily the melting peak. Measured
+on `DSC_PLLA_10K_2nd_heating`, which its own README documents as endothermic-up:
+
+| Branch searched | Apex found | Prominence |
+|---|---|---|
+| as stored (+1) | **167.4 °C** — the real melting endotherm | 1.141 |
+| negated (−1) | **85.3 °C** — the cold-crystallisation exotherm | **1.381** |
+
+The negated branch wins, so the tool reported the melting point **82 °C low** —
+on the one number the scan is run to produce. The stored signal holds both
+events unambiguously: its maximum is at 167.4 °C, its sharp minimum at 85.3 °C,
+and the file is endothermic-up, so the polarity was never in question. The
+search simply preferred the bigger event, and the bigger event was a
+crystallisation.
+
+**This is not a tuning failure.** The prominence window was swept from 1 °C to
+20 °C of scan and the negated branch wins at every value. That is the same
+finding as §4 item 4: a cold-crystallisation exotherm and a melting endotherm
+can have arbitrary and overlapping magnitudes, so no threshold on shape
+separates them. A parameter sweep produced the same wrong answer six times, and
+a seventh would have produced a seventh.
+
+The fix is to stop inferring what does not have to be inferred.
+`analyse_dsc` now takes `polarity_known`: when the caller has established that
+the signal is endothermic-up — which the HTTP path has, because `resolve_trace`
+normalises it from the file's `#EXO` declaration — the search looks upward
+only, which is the only direction a melting endotherm can be in. The default is
+`False`, so a caller holding a raw trace that has not been through
+`resolve_trace` gets the older two-branch inference rather than an assumption
+made on its behalf.
+
+The result on the committed trace: `Tm` 167.4 °C and `ΔHm` 61.2 J/g against the
+61.7 J/g recorded in `exemples/literature/README.md`, with `Xc` at 66 % — all
+three matching the published expectation for this file.
+
+**Two corrections to the record are part of this entry, and both matter more
+than the fix.**
+
+The first is that §4 item 5 had recorded this as *"with the sign corrected, Tm
+is right and ΔHm is wrong by two orders of magnitude"*, with a specific figure —
+PLA at 0.229 J/g. Reproducing it against a real trace showed neither half: the
+polarity inference picked the *wrong event*, and the enthalpy came back as
+`None`, not as a wrong number. The recorded failure mode had been more
+interesting than the real one, and that is precisely why it survived
+unexamined for so long. A diagnosis is a claim like any other and needs the
+same treatment.
+
+The second is that the `None` was the clue and it was nearly missed. A dropped
+enthalpy reads as "not applicable" and is easy to pass over; the temptation is
+to fix the missing number rather than ask why it was missing. Taking that route
+— returning the sign so the integral runs on the same curve the search used —
+produced `ΔHm` 36.09 J/g and `Xc` 39 %, which is *worse* than `None`: a
+confident crystallinity computed at the cold-crystallisation peak. It was
+caught only because the result was checked against the published table in
+`exemples/literature/README.md` rather than against the value the change was
+trying to produce. Fixing a symptom is a way of hiding a cause, and the
+symptom here was quieter than the disease.
+
+Test coverage: **5 tests** in `test_melting_is_not_crystallisation.py`, three of
+which fail against the previous behaviour. **433 backend tests passing**,
+3 xfailed, lint clean.
+
+### 3.17 An area in W/g·°C reported as an enthalpy in J/g
+
+The melting integral accumulates `excess` over *temperature*, so its units are
+W/g·°C, not J/g. Dividing by the scan rate in K/s converts it. The comment at
+that division states the requirement plainly — "which is why the rate is
+required" — but the rate was not required. When it was absent the division was
+skipped and the unconverted area was assigned to `delta_Hm` anyway, with the
+crystallinity computed from it.
+
+On `DSC_PLLA_10K_2nd_heating` that yields two numbers that both look like
+results:
+
+| Heating rate | `ΔHm` | `Xc` |
+|---|---|---|
+| 10 K/min | 61.17 J/g | 65.8 % |
+| *absent* | 10.19 "J/g" | 11.0 % |
+
+10.19 is the raw area; the ratio between the two is exactly the scan rate. The
+second number is not approximately right and there is no bound to state, because
+the missing factor can be anything from 1 to 40 K/min depending on the method.
+It is also the more dangerous of the two: 11 % crystallinity is an entirely
+ordinary value for a semi-crystalline polymer, and nothing about it invites a
+second look.
+
+The fix withholds `delta_Hm` and the crystallinity that depends on it when the
+rate is absent, and still reports the peak position, which does not need the
+rate. This is the same shape as §3.3 — an input the method requires, accepted as
+absent — and it is the second defect found in this session by following a
+`None` that the previous layer of the code had been producing correctly.
+
+Test coverage: **3 tests** in `test_enthalpy_needs_a_heating_rate.py`.
+**436 backend tests passing**, 3 xfailed, lint clean.
 
 ---
 
@@ -1068,21 +1185,63 @@ the claim to be revisited instead of decaying unnoticed.
    a literature 60–65 °C, because the real step is rejected by the symmetry
    gate that exists to reject melting flanks. So this item **remains open**: the
    constraint made the answer possible, not correct.
-5. **Melting enthalpy under inverted polarity.** With the sign corrected, Tm is
-   right and `ΔHm` is wrong by two orders of magnitude — PLA reports 0.229 J/g
-   against a plausible 20–40 J/g, and a fully crystalline reference of 93 J/g.
-   The position of the peak is recovered by negating the signal; the enthalpy
-   integral is not, because it accumulates `hf − baseline` and therefore has
-   the sign carried into it. The polarity fix is a Tm fix, not an enthalpy
-   fix, and the two must not be reported as though the same correction served
-   both.
-6. **Polarity assignment where no melting event exists.** The detector
-   establishes the sign from the width of the dominant extremum, which is
-   undefined when there is no such extremum — and is unstable in the handful
-   of files where both extrema sit on the scan edge (PVAc1-AR and PVAc1-CRYO
-   disagree with each other, as do PS3-AR and PS3-CRYO). The sign is a property
-   of the instrument, not of the sample, so it belongs to the dataset; deriving
-   it per file is the wrong unit of analysis and is why the instability appears.
+5. ~~**Melting enthalpy under inverted polarity.**~~ **Closed — and the
+   recorded diagnosis was wrong.** This item claimed that with the sign
+   corrected Tm is right and ΔHm is wrong by two orders of magnitude, PLA
+   reporting 0.229 J/g against a plausible 20–40 J/g. Neither half reproduced.
+   Measured on the committed PLLA traces, the polarity inference did not
+   corrupt the enthalpy — it selected the **wrong event**, and the enthalpy was
+   omitted rather than mis-scaled. On `DSC_PLLA_10K_2nd_heating` the tool
+   reported **Tm 85.4 °C with `ΔHm = None`**, where 85.4 °C is the
+   cold-crystallisation exotherm and the melting endotherm sits at 167.4 °C.
+
+   The defect is fixed: the melting search no longer infers a polarity the
+   caller already knows, and the trace now yields Tm 167.4 °C and ΔHm 61.2 J/g
+   against the 61.7 J/g published for that file. §3.16 records the measurement
+   and why the window sweep could not have rescued it.
+
+   Two things about this entry are worth keeping rather than fixing. The
+   figure "0.229 J/g" was specific, plausible and never reproduced against a
+   real trace; a failure mode that interesting is one nobody re-checks, which
+   is how it survived. And when the `None` was finally noticed, the first fix
+   made things worse — returning the sign so the integral would run produced
+   `ΔHm` 36.09 J/g and `Xc` 39 %, a confident crystallinity computed at the
+   crystallisation peak. The symptom was quieter than the disease.
+6. **Polarity assignment when the file does not declare it.** *Narrowed.* The
+   sign is a property of the instrument, not the sample, and `resolve_trace`
+   reads the declaration when the file carries one (`#EXO`), normalising to the
+   endothermic-up convention. §3.16 exploited exactly that: the HTTP path now
+   tells the analysis the convention is known, and gets the right melting point
+   for a trace where the inference got it wrong by 82 °C.
+
+   What remains open is the files that declare nothing. There the polarity is
+   still inferred from the most prominent excursion, and §3.16 shows the
+   inference is not merely imprecise but can pick a crystallisation event —
+   measured, the cold-crystallisation exotherm at 85.3 °C outscores the real
+   endotherm at 167.4 °C, and narrowing the prominence window does not change
+   the winner at any window from 1 °C to 20 °C. This is **item 4 by another
+   route**: distinguishing one thermal event from another by shape alone, which
+   four discriminators have now failed at. So the fix for these files is not a
+   better inference but a declaration — the same conclusion as item 4, reached
+   from the polarity side.
+
+   One consequence is measured and worth stating: for a trace with no
+   declaration the tool is *conservative* rather than wrong. It omits the
+   melting temperature when the two branches disagree about which event is
+   which, instead of picking one. A trace that states its convention gets an
+   answer; a trace that does not gets silence about the quantities the
+   convention decides.
+
+   The residual convention-dependence of `Tg` belongs here too, and it was
+   chased and rejected as a fix. Inverting the input does not move Tm or ΔHm
+   once the convention is known, but does move Tg (86.4 against 94.7 °C on the
+   25 K trace). Forcing the Tg search onto the melting peak's polarity made the
+   10 K result *worse* (165.6 against 170.1 °C). Measured directly,
+   `_find_step_temperature` returns the **same index** in both polarities
+   (2825, 5458, 5469) — it locates a step by the change in level, which
+   survives inversion — and what flips is the step's amplitude, which the
+   step-versus-peak comparison reads. A fix that improves one file and degrades
+   another is not a fix, and it was reverted and recorded rather than kept.
 7. **Stability is not accuracy.** The `Tg_reliable` flag measures whether the
    reported Tg moves when the trace is resampled. It therefore certifies
    *reproducibility of the computation*, not *correctness of the answer*: on
@@ -1111,10 +1270,10 @@ python scripts/fetch_reference_data.py        # downloads the sources above
 
 cd backend && python -m venv .venv
 .venv/bin/pip install -r requirements-dev.txt
-.venv/bin/python -m pytest                    # 332 passed, 3 xfailed
+.venv/bin/python -m pytest                    # 436 passed, 3 xfailed
 
 cd ../frontend && npm ci
-CI=true npx react-scripts test --watchAll=false   # 87 passed, 10 suites
+CI=true npx react-scripts test --watchAll=false   # 95 passed, 11 suites
 ```
 
 The three figshare datasets are large (the DSC set alone is 3.1 GB) and are
@@ -1145,10 +1304,16 @@ trace and a negative mass are all accepted without complaint by arithmetic that
 is otherwise correct; and verify against data the implementation did not
 generate.
 
-The verification described here found eight defects that no amount of internally
-consistent testing would have surfaced, established that the three
-input-checking failures share a single cause, and leaves seven questions open.
-Both outcomes are the point of doing it.
+The verification described here found **eleven** defects that no amount of
+internally consistent testing would have surfaced, established that the three
+input-checking failures share a single cause, and leaves seven entries in its
+list of open questions — one of which (§4 item 5) is struck through because the
+defect it recorded did not exist as described. It was not solved; it was wrong.
+The real defect in that function is now fixed and recorded separately (§3.16),
+and what remains open in the same area moved to item 6. The count is therefore
+unchanged while the contents are not, which is the reason the count is not the
+interesting number: a list of open questions is only as good as whether anyone
+re-checks the closed ones.
 
 The sixth defect is the one that argues most strongly for the practice. Five of
 the six were found by running data the implementation did not generate through
@@ -1156,6 +1321,23 @@ the tool. The sixth was found by running the *interface* — typing a polymer na
 and reading what came back — after every automated gate was green. A test suite
 can only assert the inputs someone thought to write down, and the absence of a
 test for a name that must be refused is invisible in a passing suite.
+
+**The tenth defect is the one that argues for re-testing a diagnosis, not just
+a fix.** It was found by disbelieving a claim this document had already made.
+§4 item 5 asserted that inverted polarity corrupted the melting enthalpy by two
+orders of magnitude, and named a figure — 0.229 J/g. Reproducing it against a
+real trace produced no corrupted enthalpy at all: the polarity inference had
+selected crystallisation as melting, and the enthalpy was omitted rather than
+mis-scaled. The recorded failure mode was more interesting than the real one,
+and a failure mode that interesting is one nobody re-checks.
+
+The same round then produced a second lesson at the cost of a wasted fix. With
+the missing enthalpy noticed, the obvious repair was to make the integral run
+on the same curve the peak search used; it produced `ΔHm` 36.09 J/g and a
+crystallinity of 39 %, neatly computed at a crystallisation peak. It was
+reverted. What caught it was comparing against the published table in
+`exemples/literature/README.md` instead of against the number the change was
+trying to produce — the symptom was quieter than the disease.
 
 The clearest lesson is about the cost of the last three. They were found only
 because the analysis was made fourteen times faster first; at ninety minutes
