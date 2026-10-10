@@ -878,7 +878,7 @@ because nothing about the resulting number looks wrong.
 
 The field used to be a free numeric input, which makes that error invisible and
 makes the number unverifiable. It now draws on an internal database
-(`backend/app/core/crystallinity_ref.py`, 19 polymers) in which **every value
+(`backend/app/core/crystallinity_ref.py`, 30 entries) in which **every value
 carries its citation**, and where the reported confidence distinguishes a
 primary source whose DOI was checked against the Crossref record from a named
 secondary compilation:
@@ -923,6 +923,86 @@ crystalline phase, or the integration baseline is too high.
 
 Test coverage: 44 new tests across three files, on the real instrument files
 committed as fixtures. **413 passing**, lint clean, build compiled.
+
+### 3.15 A database of 19 numbers, and a source that proves 22 of them
+
+The database above shipped with 19 polymers. That is a small fraction of the
+thermoplastics a laboratory actually measures, and the gap is not neutral: a
+polymer absent from the database is a polymer for which the field falls back to
+a free number, which is exactly the failure §3.14 exists to prevent. So the
+question was where to get more values that meet the same standard — a citable
+source, a named crystal form, and no silent averaging.
+
+The useful answer was not a bigger compilation. It was a **source whose numbers
+can be recomputed**.
+
+TA Instruments application note TN048 (R. L. Blaine, *Polymer Heats of Fusion*)
+publishes its table three columns deep: the enthalpy in **kJ per mole of repeat
+unit**, the repeat unit itself, and its molar mass. The J/g column is therefore
+redundant — `J/g = kJ/mol × 1000 / M` — and the redundancy is a test. All 22
+rows reconcile to within 0.5 J/g, which is the rounding in the last column:
+
+| Polymer | kJ/mol | Repeat unit | M (g/mol) | Published | Recomputed |
+|---|---|---|---|---|---|
+| PE | 4.11 | −CH₂− | 14.03 | 293 | 292.94 |
+| POM | 9.79 | −CH₂O− | 30.03 | 326 | 326.01 |
+| PA6 | 26.0 | −NH(CH₂)₅CO− | 113.2 | 230 | 229.68 |
+| PA66 | 57.8 | −NH(CH₂)₆NHCO(CH₂)₄CO− | 256.3 | 226 | 225.52 |
+| PEEK | 37.4 | −C₆H₄COC₆H₄OC₆H₄O− | 288.3 | 130 | 129.73 |
+
+**Eleven polymers were added** — POM, PA11, PA12, PA610, PA612, PA69, PB, PVC,
+PCTFE, PVF and PTrFE — bringing the database to 30 entries. Each carries the
+kJ/mol and the molar mass in its own citation, and
+`test_value_recomputes_from_its_own_citation` recalculates the J/g from those
+two numbers on every run. A transcription slip in either column fails the
+build; the value is derived rather than trusted.
+
+**The cross-check against the existing values was the more valuable half.** Of
+the eleven polymers the two sources share, **nine agree exactly** — PE, PP,
+PET, PA6, PBT, PEEK, PTFE, PEO and PVDF, several to the last digit. Two do not:
+
+- **PA66: 255 against 226 J/g.** Both values are kept, neither is averaged. The
+  255 is the Polymer-Handbook figure the applied literature uses; the 226 is
+  what the kJ/mol derivation gives. The 13 % gap propagates straight into the
+  crystallinity, so the pair is recorded as a divergence.
+- **PVA: 138.6 against 161 J/g.** Here the table's value was made primary,
+  because the old entry's own note already admitted the true state of affairs —
+  "the literature reports 138–161 J/g depending on stereochemical regularity".
+  A range is not a value. Both ends are now entries, and the note says which
+  end applies to which material.
+
+**Two defects were found by the expansion itself**, and both are of the kind
+this document collects:
+
+1. **A range bound that was an assumption.** `test_values_are_in_a_physical_range`
+   asserted 50–300 J/g. POM is 326 J/g, so a correct value failed a test whose
+   ceiling was invented rather than published. The bound was corrected to the
+   data — and `test_the_range_bounds_are_actually_exercised` now pins the POM
+   (326) and PCTFE (43.1) values as the extremes, so loosening the range has a
+   visible cost instead of being free.
+2. **A multi-word lookup that never fired.** The resolver splits a sample name
+   on `-`, `_` and whitespace and matches each token, which is what makes
+   `JASCO_LDPE-SBC-818` resolve. But that means a name like `nylon 66` was
+   matched token by token — and `nylon` alone resolves to *PA6*. The
+   multi-word aliases added with the nylon family were unreachable, and
+   `lookup("nylon 66")` returned **PA6**. The resolver now tries the joined
+   string first, so the more specific match wins. `nylon 66` → PA66,
+   `nylon 6` → PA6, and the four existing qualifier traps still pass.
+
+That second one is the instructive failure: the database was *asking* for the
+right answer and the lookup quietly returned the wrong polymer, which §3.14
+already identifies as worse than returning nothing.
+
+**A caveat is carried, not hidden.** The table's PVC value (176 J/g) is a
+*syndiotactic* model material; commercial PVC is atactic and does not
+crystallise. The entry says so, is marked `divergent`, and warns that a non-zero
+ΔHm in a commercial PVC sample is more likely the plasticiser than the polymer.
+Adding a number that is real but not applicable to the material in the crucible
+would have repeated the error the whole module is built to avoid.
+
+Test coverage: **20 new tests** (11 parametrised derivations, plus the adopted
+set, the range witnesses and the lookup fix). **428 backend tests passing**,
+3 xfailed, lint clean, frontend 95 passing.
 
 
 ---

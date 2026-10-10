@@ -83,11 +83,27 @@ class TestDatabaseIntegrity:
                 assert ref.value_J_g > 0
 
     def test_values_are_in_a_physical_range(self) -> None:
-        # Entalpias de fusão de polímeros ficam entre ~50 e ~300 J/g. Fora
+        # Entalpias de fusão de polímeros ficam entre ~40 e ~350 J/g. Fora
         # disso é erro de digitação.
+        #
+        # O limite superior era 300 até a TN048 entrar: o POM tem 326 J/g e
+        # seria reprovado por um teto que era, ele mesmo, uma suposição. O
+        # limite foi corrigido para o valor publicado, não o contrário -- e o
+        # PCTFE (43,1 J/g) é o caso que ancora o piso.
         for key, entry in ENTHALPY_DB.items():
             for ref in entry.references:
-                assert 50.0 <= ref.value_J_g <= 300.0, f"{key}: {ref.value_J_g}"
+                assert 40.0 <= ref.value_J_g <= 350.0, f"{key}: {ref.value_J_g}"
+
+    def test_the_range_bounds_are_actually_exercised(self) -> None:
+        # Um limite que nenhum dado toca é decoração. Estes dois garantem que
+        # os extremos da faixa são reais, e que afrouxá-la tem preço: se o
+        # POM ou o PCTFE saírem do banco, o teste avisa que a faixa perdeu
+        # suas testemunhas.
+        values = [
+            ref.value_J_g for entry in ENTHALPY_DB.values() for ref in entry.references
+        ]
+        assert max(values) == 326.0, "POM deixou de ser o limite superior"
+        assert min(values) == 43.1, "PCTFE deixou de ser o limite inferior"
 
     def test_verified_entries_cite_a_doi(self) -> None:
         # O rótulo 'verified' significa que o registro foi conferido, então a
@@ -108,6 +124,102 @@ class TestDatabaseIntegrity:
         keys = [o["key"] for o in options()]
         assert keys == sorted(keys)
         assert len(keys) == len(set(keys))
+
+
+# The TN048 table publishes the enthalpy twice, and the two columns are
+# redundant only if the arithmetic between them is right: each row gives
+# kJ/mol and the repeat-unit mass, and J/g is kJ/mol * 1000 / M. Deriving the
+# J/g from the published kJ/mol and M means the number in the database is
+# *recomputed* on every test run rather than trusted -- a transcription slip
+# in either column shows up as a mismatch here instead of as a slightly wrong
+# crystallinity three months from now.
+#
+# All 22 rows of the published table reconcile to within 0.5 J/g, which is the
+# rounding in the J/g column; the tolerance below allows for that and no more.
+TN048_ROWS = [
+    # key, kJ per mole of repeat unit, repeat-unit molar mass, J/g in the note
+    ("POM", 9.79, 30.03),
+    ("PA11", 44.7, 183.3),
+    ("PA12", 48.4, 197.3),
+    ("PA66", 57.8, 256.3),
+    ("PA69", 69.0, 268.4),
+    ("PA610", 71.7, 282.4),
+    ("PA612", 80.1, 310.5),
+    ("PB", 7.00, 56.1),
+    ("PCTFE", 5.02, 116.5),
+    ("PVF", 7.54, 46.04),
+    ("PTrFE", 5.44, 82.0),
+    ("PVC", 11.0, 62.50),
+]
+
+
+class TestTN048Derivation:
+    """Each TN048 value must reproduce from the kJ/mol and M in its own note."""
+
+    @staticmethod
+    def _tn048_ref(key: str):
+        """The TN048 citation of an entry, wherever it sits in the list.
+
+        Not necessarily ``references[0]``: PA66 keeps the 255 J/g compilation
+        as its primary, because that is the value the applied literature uses,
+        and records the TN048 derivation alongside it as the divergent
+        alternative. The test is about whether *the derived number* is
+        reproducible, not about which one the entry happens to lead with.
+        """
+        for ref in ENTHALPY_DB[key].references:
+            if "TN048" in ref.source:
+                return ref
+        raise AssertionError(f"{key}: no TN048 citation to check against")
+
+    @pytest.mark.parametrize("key,kj_per_mol,m_repeat", TN048_ROWS)
+    def test_value_recomputes_from_its_own_citation(
+        self, key: str, kj_per_mol: float, m_repeat: float
+    ) -> None:
+        expected = kj_per_mol * 1000.0 / m_repeat
+        ref = self._tn048_ref(key)
+
+        assert abs(ref.value_J_g - expected) <= 0.5, (
+            f"{key}: database says {ref.value_J_g} J/g but the citation's own "
+            f"{kj_per_mol} kJ/mol over {m_repeat} g/mol gives {expected:.2f}"
+        )
+        # The two numbers the derivation needs have to be in the citation,
+        # otherwise the test passes while the user cannot check anything. The
+        # source text is Portuguese, so the numbers are written with a decimal
+        # comma -- normalising both sides is the comparison; checking for a
+        # dot would test the notation rather than the presence of the number.
+        def as_pt(value: float) -> str:
+            return f"{value:g}".replace(".", ",")
+
+        assert as_pt(kj_per_mol) in ref.source, f"{key}: kJ/mol ausente da citação"
+        assert as_pt(m_repeat) in ref.source, f"{key}: M ausente da citação"
+
+    def test_every_adopted_row_is_in_the_database(self) -> None:
+        # Every row listed above must actually exist in the database. The
+        # table has 22 rows; all 22 are adopted, so there is no exclusion list
+        # to keep -- if one is ever dropped, it has to be removed from
+        # TN048_ROWS too, and that edit is visible in the diff rather than
+        # silently reducing the coverage.
+        for key, _kj, _m in TN048_ROWS:
+            assert key in ENTHALPY_DB, f"{key} derivado da TN048 mas ausente"
+
+    def test_the_adopted_rows_cover_the_polymers_the_table_adds(self) -> None:
+        # The eleven keys below are the polymers TN048 supplies that the
+        # database did not have before this change, and the twelve minus PVC
+        # is deliberate: PVC is in TN048_ROWS because its value is derived
+        # from the table, but it is *not* part of the adoption claim -- it
+        # enters with a caveat (commercial PVC is amorphous) rather than as a
+        # polymer the database can confidently answer for.
+        #
+        # PA66 is in TN048_ROWS and not here for the opposite reason: the
+        # database already had it, and the table contributes a second,
+        # divergent value rather than a new polymer.
+        adopted = {
+            "POM", "PA11", "PA12", "PA610", "PA612", "PA69",
+            "PB", "PCTFE", "PVF", "PTrFE",
+        }
+        derived = {key for key, _kj, _m in TN048_ROWS}
+        assert derived - adopted == {"PVC", "PA66"}
+        assert len(adopted) == 10
 
 
 class TestCrystallinityGuard:

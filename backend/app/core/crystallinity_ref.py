@@ -96,6 +96,20 @@ class PolymerEnthalpy:
 # as compilações secundárias (Polymer Handbook, Physical Properties of Polymers
 # Handbook, ATHAS) são citadas por edição porque são elas que a literatura
 # aplicada cita de fato quando não cita o artigo primário.
+#
+# A referência mais forte do conjunto é a TN048 do fabricante do próprio
+# instrumento, e por um motivo específico: ela publica a entalpia em kJ/mol
+# **e** a unidade repetida com seu peso molecular, de modo que cada valor em
+# J/g se recalcula (J/g = kJ/mol x 1000 / M_repetição). O valor não precisa
+# ser aceito por autoridade -- ele é reconstruível. As 22 linhas da tabela
+# reconciliam dentro de 0,5 J/g, e esse resíduo é arredondamento.
+TA_TN048 = (
+    "R. L. Blaine, 'Polymer Heats of Fusion', TA Instruments Thermal "
+    "Applications Note TN048 (TA123). Valores derivados de B. Wunderlich, "
+    "Macromolecular Physics, Vol. 3. Normalizados por massa a partir de "
+    "kJ/mol e do peso da unidade repetida, ambos publicados na mesma tabela."
+)
+
 ENTHALPY_DB: dict[str, PolymerEnthalpy] = {
     "PE": PolymerEnthalpy(
         key="PE",
@@ -220,6 +234,25 @@ ENTHALPY_DB: dict[str, PolymerEnthalpy] = {
                 "listam 280 J/g.",
                 crystal_form="α (triclínica)",
                 confidence="divergent",
+                note=(
+                    "Valor de compilação, e o mais usado na literatura "
+                    "aplicada de PA66."
+                ),
+            ),
+            CrystallinityReference(
+                226.0,
+                TA_TN048 + " 57,8 kJ/mol; unidade "
+                "-NH(CH2)6NHCO(CH2)4CO-, M = 256,3 g/mol.",
+                crystal_form="α (triclínica)",
+                confidence="divergent",
+                note=(
+                    "Divergência real, não erro de um dos lados: a TN048 "
+                    "deriva de Wunderlich (kJ/mol por unidade repetida) e "
+                    "chega a 226; as compilações aplicadas citam 255. "
+                    "Escolher entre os dois muda a cristalinidade em ~13 %, "
+                    "então o par fica registrado em vez de resolvido por "
+                    "média. A média (240) não pertence a nenhuma das fontes."
+                ),
             ),
         ),
     ),
@@ -276,6 +309,180 @@ ENTHALPY_DB: dict[str, PolymerEnthalpy] = {
                 "doi:10.1016/0032-3861(83)90144-1",
                 crystal_form="ortorrômbica",
                 confidence="verified",
+            ),
+        ),
+    ),
+    # -----------------------------------------------------------------------
+    # Acrescentados a partir da TN048 (TA Instruments). Cada um traz o kJ/mol e
+    # o peso da unidade repetida na citação, para que o valor em J/g possa ser
+    # recalculado em vez de aceito: J/g = kJ/mol x 1000 / M_repetição.
+    # -----------------------------------------------------------------------
+    "POM": PolymerEnthalpy(
+        key="POM",
+        display_name="Poli(oximetileno) / POM / Acetal (POM)",
+        names=("pom", "polyoxymethylene", "polioximetileno", "acetal", "poliacetal"),
+        references=(
+            CrystallinityReference(
+                326.0,
+                TA_TN048 + " 9,79 kJ/mol; unidade -CH2O-, M = 30,03 g/mol.",
+                crystal_form="hexagonal (POM estável)",
+                confidence="compilation",
+                note=(
+                    "O maior ΔHf100 entre os termoplásticos comuns, e por isso "
+                    "o mais penalizado por um denominador errado: usar PE (293) "
+                    "para POM subestima a cristalinidade em ~11 %."
+                ),
+            ),
+        ),
+    ),
+    "PA11": PolymerEnthalpy(
+        key="PA11",
+        display_name="Poliamida 11 / Nylon 11 (PA11)",
+        names=("pa11", "nylon11", "nylon-11", "polyamide 11", "poliamida 11"),
+        references=(
+            CrystallinityReference(
+                244.0,
+                TA_TN048 + " 44,7 kJ/mol; unidade -NH(CH2)10CO-, M = 183,3 g/mol.",
+                crystal_form="α' (triclínica)",
+                confidence="compilation",
+            ),
+        ),
+    ),
+    "PA12": PolymerEnthalpy(
+        key="PA12",
+        display_name="Poliamida 12 / Nylon 12 (PA12)",
+        names=("pa12", "nylon12", "nylon-12", "polyamide 12", "poliamida 12", "laurolactam"),
+        references=(
+            CrystallinityReference(
+                245.0,
+                TA_TN048 + " 48,4 kJ/mol; unidade -NH(CH2)11CO-, M = 197,3 g/mol.",
+                crystal_form="γ (monoclínica)",
+                confidence="compilation",
+            ),
+        ),
+    ),
+    "PA610": PolymerEnthalpy(
+        key="PA610",
+        display_name="Poliamida 610 / Nylon 610 (PA610)",
+        names=("pa610", "nylon610", "nylon-610", "polyamide 610"),
+        references=(
+            CrystallinityReference(
+                254.0,
+                TA_TN048 + " 71,7 kJ/mol; unidade -NH(CH2)6NHCO(CH2)8CO-, "
+                "M = 282,4 g/mol.",
+                crystal_form="triclínica",
+                confidence="compilation",
+            ),
+        ),
+    ),
+    "PA612": PolymerEnthalpy(
+        key="PA612",
+        display_name="Poliamida 612 / Nylon 612 (PA612)",
+        names=("pa612", "nylon612", "nylon-612", "polyamide 612"),
+        references=(
+            CrystallinityReference(
+                258.0,
+                TA_TN048 + " 80,1 kJ/mol; unidade -NH(CH2)6NHCO(CH2)10CO-, "
+                "M = 310,5 g/mol.",
+                crystal_form="triclínica",
+                confidence="compilation",
+            ),
+        ),
+    ),
+    "PA69": PolymerEnthalpy(
+        key="PA69",
+        display_name="Poliamida 69 / Nylon 69 (PA69)",
+        names=("pa69", "nylon69", "nylon-69", "polyamide 69"),
+        references=(
+            CrystallinityReference(
+                257.0,
+                TA_TN048 + " 69,0 kJ/mol; unidade -NH(CH2)6NHCO(CH2)7CO-, "
+                "M = 268,4 g/mol.",
+                crystal_form="triclínica",
+                confidence="compilation",
+            ),
+        ),
+    ),
+    "PB": PolymerEnthalpy(
+        key="PB",
+        display_name="Polibuteno-1 (PB-1 / PB)",
+        names=("pb", "polybutene-1", "polybutene", "polibuteno", "pb-1"),
+        references=(
+            CrystallinityReference(
+                125.0,
+                TA_TN048 + " 7,00 kJ/mol; unidade -CH2CH(C2H5)-, M = 56,1 g/mol.",
+                crystal_form="forma I (hexagonal)",
+                confidence="compilation",
+                note=(
+                    "A forma I é a estável; a forma II (tetragonal), obtida "
+                    "por resfriamento rápido, tem ΔHf100 diferente. O valor "
+                    "de 125 J/g refere-se à forma I."
+                ),
+            ),
+        ),
+    ),
+    "PVC": PolymerEnthalpy(
+        key="PVC",
+        display_name="Poli(cloreto de vinila) (PVC)",
+        names=("pvc", "polyvinyl chloride", "policloreto de vinila"),
+        references=(
+            CrystallinityReference(
+                176.0,
+                TA_TN048 + " 11,0 kJ/mol; unidade -CH2CH(Cl)-, M = 62,50 g/mol. "
+                "O valor é de um material sindiotático modelo: o PVC comercial "
+                "é atático e praticamente não cristaliza.",
+                crystal_form=None,
+                confidence="divergent",
+                note=(
+                    "Cuidado com este: o PVC comercial é amorfo e um ΔHm "
+                    "medido nele vem de aditivo ou de carga, não do polímero. "
+                    "O valor de 176 J/g vale para o PVC sindiotático, que "
+                    "cristaliza; usá-lo como denominador de um PVC comercial "
+                    "produz uma cristalinidade sem significado."
+                ),
+            ),
+        ),
+        note=(
+            "Entra com ressalva explícita. Um ΔHm não nulo em PVC comercial "
+            "plastificado é quase sempre do plastificante ou do estabilizante."
+        ),
+    ),
+    "PCTFE": PolymerEnthalpy(
+        key="PCTFE",
+        display_name="Policlorotrifluoroetileno (PCTFE)",
+        names=("pctfe", "polychlorotrifluoroethylene", "cloreto de politrifluoroetileno"),
+        references=(
+            CrystallinityReference(
+                43.1,
+                TA_TN048 + " 5,02 kJ/mol; unidade -CF2CF(Cl)-, M = 116,5 g/mol.",
+                crystal_form=None,
+                confidence="compilation",
+            ),
+        ),
+    ),
+    "PVF": PolymerEnthalpy(
+        key="PVF",
+        display_name="Poli(fluoreto de vinila) (PVF)",
+        names=("pvf", "polyvinyl fluoride", "tedlar"),
+        references=(
+            CrystallinityReference(
+                164.0,
+                TA_TN048 + " 7,54 kJ/mol; unidade -CH2CH(F)-, M = 46,04 g/mol.",
+                crystal_form=None,
+                confidence="compilation",
+            ),
+        ),
+    ),
+    "PTrFE": PolymerEnthalpy(
+        key="PTrFE",
+        display_name="Politrifluoroetileno (PTrFE)",
+        names=("ptrfe", "polytrifluoroethylene"),
+        references=(
+            CrystallinityReference(
+                66.3,
+                TA_TN048 + " 5,44 kJ/mol; unidade -CH(F)CF2-, M = 82,0 g/mol.",
+                crystal_form=None,
+                confidence="compilation",
             ),
         ),
     ),
@@ -366,11 +573,27 @@ ENTHALPY_DB: dict[str, PolymerEnthalpy] = {
         names=("pva", "pvoh", "polyvinyl alcohol", "pval"),
         references=(
             CrystallinityReference(
+                161.0,
+                TA_TN048 + " 7,11 kJ/mol; unidade -CH2CH(OH)-, M = 44,05 g/mol.",
+                crystal_form=None,
+                confidence="compilation",
+                note=(
+                    "A TN048 usa 161, o extremo superior da faixa publicada. "
+                    "Vale para PVA de alta regularidade estereoquímica."
+                ),
+            ),
+            CrystallinityReference(
                 138.6,
                 "Polymer Handbook, 4th ed. A literatura reporta 138-161 J/g "
                 "conforme a regularidade estereoquímica.",
                 crystal_form="monoclínica",
-                confidence="compilation",
+                confidence="divergent",
+                note=(
+                    "O limite inferior da faixa. A dispersão de 15 % entre "
+                    "138 e 161 não é erro de medição: o PVA comercial tem "
+                    "grau de hidrólise e tactilidade variáveis, e o ΔHf100 "
+                    "acompanha. Informe o grau de hidrólise com o resultado."
+                ),
             ),
         ),
     ),
@@ -520,6 +743,15 @@ def lookup(name: str | None) -> PolymerEnthalpy | None:
     # ``['jasco','ldpe','sbc','818']`` e o ``ldpe`` é encontrado.
     tokens = [t for t in re.split(r"[-_\s]+", cleaned) if t]
     if len(tokens) > 1:
+        # The whole string first, with spaces collapsed to hyphens: a matched
+        # ``\"nylon 66\"`` or ``\"polyamide 12\"`` is more specific than any single
+        # token, and splitting first would throw that information away. Without
+        # this, the multi-word aliases added with the nylon family (PA11, PA12,
+        # PA610, PA612, PA69) are never reached, because the loop below has a
+        # single token in hand and matches on the generic word instead.
+        joined = "-".join(tokens)
+        if joined in _ALIASES:
+            return ENTHALPY_DB.get(_ALIASES[joined])
         for tok in tokens:
             if tok in _ALIASES:
                 return ENTHALPY_DB.get(_ALIASES[tok])

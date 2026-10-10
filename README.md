@@ -40,7 +40,14 @@ that exponent is supplied, because assuming one silently produces a wrong number
 ### Method notes the interface states plainly
 
 - **Crystallinity from DSC** requires a reference enthalpy ΔH°m for a 100 %
-  crystalline sample. It is reported only when that value is given.
+  crystalline sample. It is reported only when that value is given, and the
+  value is drawn from a database of **30 polymers** in which each entry carries
+  its citation, its crystal form and a confidence rung. Where the literature
+  diverges, both values are kept with their own sources rather than averaged.
+  Eleven of those entries come from a source whose numbers are *recomputable*:
+  TA Instruments TN048 publishes the enthalpy in kJ per mole of repeat unit
+  alongside the repeat unit's molar mass, so every J/g value is derived by the
+  test suite rather than trusted.
 - **Crystallite size from XRD** uses the Scherrer equation. The peak width is
   converted to radians and instrumental broadening is removed in quadrature;
   the shape factor K (default 0.9) is an input, not a hidden constant.
@@ -202,8 +209,8 @@ logs a warning to the console. Always set it in the hosting environment.
 ## ✅ Tests
 
 ```bash
-cd backend  && .venv/bin/python -m pytest     # 332 passed, 3 xfailed
-cd frontend && CI=true npx react-scripts test --watchAll=false   # 87 passed, 10 suites
+cd backend  && .venv/bin/python -m pytest     # 428 passed, 3 xfailed
+cd frontend && CI=true npx react-scripts test --watchAll=false   # 95 passed, 11 suites
 ```
 
 Backend tests cover the API contract (JSON and multipart paths), each module's
@@ -211,12 +218,16 @@ maths against synthetic cases with known answers, and the published-data checks
 described above. Frontend tests mount the real shell in jsdom, switch through
 the modules, and confirm that a result renders.
 
-Two suites are worth naming because they guard against failures a passing suite
-otherwise hides. `test_reference_repertoire.py` asserts **48 real instrument
-names that must resolve and 31 wrong identifications that must be refused**, so
-adding an alias cannot silently shadow an existing one. `test_confidence_claims.py`
-asserts that every reported field carries its confidence rung, so a value cannot
-be added without stating what it is worth.
+Three suites are worth naming because they guard against failures a passing
+suite otherwise hides. `test_reference_repertoire.py` asserts **48 real
+instrument names that must resolve and 31 wrong identifications that must be
+refused**, so adding an alias cannot silently shadow an existing one.
+`test_confidence_claims.py` asserts that every reported field carries its
+confidence rung, so a value cannot be added without stating what it is worth.
+`TestTN048Derivation` in `test_crystallinity_reference.py` recomputes every
+reference enthalpy from the kJ/mol and molar mass published in its own
+citation, so a transcription slip in the database fails the build instead of
+producing a crystallinity that is slightly wrong.
 
 ---
 
