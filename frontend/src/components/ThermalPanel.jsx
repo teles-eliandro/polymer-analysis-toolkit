@@ -1,6 +1,6 @@
 /** Thermal module: TGA and DSC trace analysis. */
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import Plot from 'react-plotly.js';
 import { thermalApi, describeError } from '../services/api';
 import { useI18n } from '../i18n/I18nContext';
@@ -40,6 +40,12 @@ export default function ThermalPanel() {
   const [dscText, setDscText] = useState('');
   const [heatingRate, setHeatingRate] = useState('10');
   const [refEnthalpy, setRefEnthalpy] = useState('');
+  // The internal database of reference enthalpies. Loaded once, when the DSC
+  // form is first shown, so the field can offer values instead of asking for
+  // one from memory. Selecting an entry sets the number *and* displays its
+  // citation, which is what makes the resulting crystallinity verifiable.
+  const [enthalpyRefs, setEnthalpyRefs] = useState([]);
+  const [enthalpyChoice, setEnthalpyChoice] = useState('');
   const [sampleName, setSampleName] = useState('');
 
   const [result, setResult] = useState(null);
@@ -51,6 +57,44 @@ export default function ThermalPanel() {
   const isTga = mode === 'tga';
   const modeLabel = isTga ? t('thermal.tga') : t('thermal.dsc');
   const currentText = isTga ? tgaText : dscText;
+
+  /**
+   * Load the reference enthalpy database once.
+   *
+   * A failure here is deliberately silent: the field stays a plain numeric
+   * input, which is how it worked before. The database is a convenience, and
+   * an unreachable one must not block the analysis.
+   *
+   * Two things are checked, and both are load-bearing. The method must exist
+   * (``thermalApi`` is mocked wholesale in the component tests, and a mock
+   * predating this method would otherwise throw inside the effect), and what
+   * it returns must be a promise -- a stub returning ``undefined`` throws on
+   * ``.then`` in exactly the same way. Either failure unmounts the panel, so
+   * an optional feature would take the whole analysis down with it.
+   */
+  useEffect(() => {
+    if (typeof thermalApi.crystallinityReferences !== 'function') return undefined;
+    let cancelled = false;
+    const pending = thermalApi.crystallinityReferences();
+    if (!pending || typeof pending.then !== 'function') return undefined;
+    pending
+      .then((res) => {
+        if (!cancelled) setEnthalpyRefs(res.data?.references || []);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  /**
+   * The chosen entry, so its citation can be shown under the field.
+   *
+   * Showing the source next to the number is the point of the database: a
+   * crystallinity computed from an uncited 293 is not checkable by anyone
+   * reading the result later.
+   */
+  const chosenRef = enthalpyRefs.find((r) => r.key === enthalpyChoice) || null;
 
   /**
    * A file is read by the server, not by the browser.
@@ -298,14 +342,65 @@ export default function ThermalPanel() {
                 <span className="field-label">
                   {t('thermal.refEnthalpy')} <em>({t('common.optional')})</em>
                 </span>
+                {enthalpyRefs.length > 0 && (
+                  // Choosing from the database fills the number below and shows
+                  // its citation. The value is polymer-specific (293 J/g for PE
+                  // against 93 J/g for PLA), so a wrong choice is not visible
+                  // in the answer -- only in the source.
+                  <select
+                    value={enthalpyChoice}
+                    onChange={(e) => {
+                      const key = e.target.value;
+                      setEnthalpyChoice(key);
+                      const entry = enthalpyRefs.find((r) => r.key === key);
+                      setRefEnthalpy(
+                        entry && entry.value_J_g !== null && entry.value_J_g !== undefined
+                          ? String(entry.value_J_g)
+                          : ''
+                      );
+                    }}
+                  >
+                    <option value="">{t('thermal.refEnthalpyPick')}</option>
+                    {enthalpyRefs.map((r) => (
+                      <option key={r.key} value={r.key}>
+                        {r.label}
+                        {r.value_J_g === null || r.value_J_g === undefined
+                          ? ` — ${t('thermal.refEnthalpyAmorphous')}`
+                          : ` — ${r.value_J_g} J/g`}
+                      </option>
+                    ))}
+                  </select>
+                )}
                 <input
                   type="number"
                   step="1"
                   min="0.1"
                   value={refEnthalpy}
                   placeholder="e.g. 290"
-                  onChange={(e) => setRefEnthalpy(e.target.value)}
+                  onChange={(e) => {
+                    setRefEnthalpy(e.target.value);
+                    // Typing a value means the choice no longer describes the
+                    // field, so the citation must not keep claiming it does.
+                    setEnthalpyChoice('');
+                  }}
                 />
+                {chosenRef && chosenRef.note && (
+                  <span className="field-hint">{chosenRef.note}</span>
+                )}
+                {chosenRef && chosenRef.source && (
+                  <span className="field-hint">
+                    {t('thermal.refEnthalpySource')}: {chosenRef.source}
+                    {chosenRef.crystal_form ? ` — ${chosenRef.crystal_form}` : ''}
+                  </span>
+                )}
+                {chosenRef && chosenRef.alternatives && chosenRef.alternatives.length > 0 && (
+                  <span className="field-hint">
+                    {t('thermal.refEnthalpyAlternatives')}:{' '}
+                    {chosenRef.alternatives
+                      .map((a) => `${a.value_J_g} J/g (${a.source})`)
+                      .join('; ')}
+                  </span>
+                )}
                 <span className="field-hint">{t('thermal.refEnthalpyHint')}</span>
               </label>
             </div>

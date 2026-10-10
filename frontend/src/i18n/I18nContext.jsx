@@ -181,6 +181,10 @@ const MESSAGES = {
     'thermal.heatingRateHint':
       'Required for enthalpies: the signal is integrated over temperature, so the scan rate is needed to get J/g.',
     'thermal.refEnthalpy': 'Reference melting enthalpy (J/g)',
+    'thermal.refEnthalpyPick': 'Choose a polymer…',
+    'thermal.refEnthalpyAmorphous': 'amorphous, not applicable',
+    'thermal.refEnthalpySource': 'Source',
+    'thermal.refEnthalpyAlternatives': 'Other values in the literature',
     'thermal.refEnthalpyHint':
       'The melting enthalpy of the same polymer in a fully crystalline state. Required for a crystallinity value, and it must be the right polymorph.',
     'thermal.Td5': 'Td at 5 % loss',
@@ -574,6 +578,10 @@ const MESSAGES = {
     'thermal.heatingRateHint':
       'Necessária para entalpias: o sinal é integrado em temperatura, então a taxa é necessária para obter J/g.',
     'thermal.refEnthalpy': 'Entalpia de fusão de referência (J/g)',
+    'thermal.refEnthalpyPick': 'Escolha um polímero…',
+    'thermal.refEnthalpyAmorphous': 'amorfo, não se aplica',
+    'thermal.refEnthalpySource': 'Fonte',
+    'thermal.refEnthalpyAlternatives': 'Outros valores na literatura',
     'thermal.refEnthalpyHint':
       'A entalpia de fusão do mesmo polímero totalmente cristalino. Necessária para cristalinidade, e precisa ser a forma polimórfica correta.',
     'thermal.Td5': 'Td com 5 % de perda',
@@ -968,6 +976,10 @@ const MESSAGES = {
     'thermal.heatingRateHint':
       'Necesaria para entalpías: la señal se integra en temperatura, así que la velocidad es necesaria para obtener J/g.',
     'thermal.refEnthalpy': 'Entalpía de fusión de referencia (J/g)',
+    'thermal.refEnthalpyPick': 'Elija un polímero…',
+    'thermal.refEnthalpyAmorphous': 'amorfo, no aplicable',
+    'thermal.refEnthalpySource': 'Fuente',
+    'thermal.refEnthalpyAlternatives': 'Otros valores en la literatura',
     'thermal.refEnthalpyHint':
       'La entalpía de fusión del mismo polímero totalmente cristalino. Necesaria para la cristalinidad, y debe ser el polimorfo correcto.',
     'thermal.Td5': 'Td con 5 % de pérdida',

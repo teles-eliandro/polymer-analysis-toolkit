@@ -140,6 +140,17 @@ export const thermalApi = {
     if (refEnthalpy !== null) form.append('ref_enthalpy_J_g', String(refEnthalpy));
     return http.post('/api/v1/thermal/analyse', form);
   },
+
+  /**
+   * The internal database of 100 % crystalline reference enthalpies.
+   *
+   * Each entry carries its citation, so the value can be offered as a choice
+   * with the source attached instead of typed as a bare number. The polymer
+   * is also resolved from the sample name in the file by the server, so
+   * filling this in is optional rather than required.
+   */
+  crystallinityReferences: () =>
+    http.get('/api/v1/thermal/crystallinity-references'),
 };
 
 export const mechanicalApi = {
