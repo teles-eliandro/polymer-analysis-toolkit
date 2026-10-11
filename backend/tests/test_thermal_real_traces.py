@@ -54,12 +54,13 @@ def test_pla_pha_blend_is_not_split_into_a_fake_second_step():
     strength of a better curve fit.
     """
     T, m = _load("tga_pla_pha_blend")
-    r = analyse_tga(T, m)
+    r = analyse_tga(T, m, lang="en")
     assert len(r.steps) == 1
     # The single step does span both events.
     assert r.steps[0]["onset_C"] < 270.0
     assert r.steps[0]["end_C"] > 400.0
     # And the reader is told the early loss is inside it rather than separate.
+    # ``lang="en"``: a asserção procura a redação inglesa, e o padrão é pt.
     assert any("riding on the main decomposition" in n for n in r.notes)
 
 

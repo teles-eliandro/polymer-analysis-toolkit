@@ -19,9 +19,11 @@ from app.api.v1.schemas import (
     TraceColumn,
     TracePreview,
 )
+from app.core import crystallinity_ref_i18n as i18n
 from app.core.compare import compare_result
 from app.core.crystallinity_ref import lookup as lookup_enthalpy
 from app.core.crystallinity_ref import options as crystallinity_options
+from app.core.messages_i18n import msg
 from app.core.structure import analyse_ftir
 from app.core.thermal import analyse_dsc, analyse_tga
 from app.core.trace_io import TraceImportError, read_trace_file, resolve_trace
@@ -104,6 +106,15 @@ async def import_trace_endpoint(
             "'tga' (temperature + mass)."
         ),
     ),
+    lang: str = Form(
+        "pt",
+        pattern="^(pt|en|es)$",
+        description=(
+            "Language for the refusal and warning prose (pt, en, es). "
+            "Same closed set as the query parameter elsewhere: an unknown "
+            "code is rejected rather than silently served in Portuguese."
+        ),
+    ),
 ) -> TracePreview:
     """
     Read an instrument file and report what was found, without analysing it.
@@ -140,7 +151,7 @@ async def import_trace_endpoint(
         tmp.write(content)
         tmp_path = Path(tmp.name)
     try:
-        tf = read_trace_file(tmp_path)
+        tf = read_trace_file(tmp_path, lang)
     except TraceImportError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except OSError as exc:  # pragma: no cover - filesystem, not input
@@ -169,14 +180,18 @@ async def import_trace_endpoint(
 
     try:
         resolved = resolve_trace(
-            tf, x_role, y_role, invert_for_endothermic_up=(target_key == "dsc")
+            tf,
+            x_role,
+            y_role,
+            invert_for_endothermic_up=(target_key == "dsc"),
+            lang=lang,
         )
     except TraceImportError as exc:
         # Not fatal for the endpoint's purpose: the preview is still useful,
         # and the reason the trace could not be resolved is the answer to the
         # question asked. Returning 400 here would hide the column listing
         # that explains it.
-        preview.notes.append(f"não resolvido: {exc}")
+        preview.notes.append(msg("trace.unresolved", lang, error=exc))
         return preview
 
     preview.temperature = resolved.x
@@ -202,13 +217,14 @@ async def import_trace_endpoint(
         preview.points_per_degree = round(ppd, 3)
         if ppd < _MIN_POINTS_PER_DEGREE:
             preview.notes.append(
-                f"O traço tem {ppd:.1f} ponto(s) por grau ({n} pontos em "
-                f"{span:.0f} graus). Abaixo de {_MIN_POINTS_PER_DEGREE:.0f} "
-                "pontos por grau o degrau de uma transição vítrea é mais "
-                "estreito que o espaçamento, e nenhum detector pode localizá-lo: "
-                "um valor de Tg reportado neste arquivo é ruído da linha de "
-                "base, não uma transição. O pico de fusão, que é largo, "
-                "continua utilizável."
+                msg(
+                    "trace.sparse_points_per_degree",
+                    lang,
+                    ppd=ppd,
+                    n=n,
+                    span=span,
+                    minimum=_MIN_POINTS_PER_DEGREE,
+                )
             )
     return preview
 
@@ -225,6 +241,15 @@ async def analyse_trace_endpoint(
     ),
     target: str = Form(
         "dsc", description="Which analysis to run: 'dsc' or 'tga'."
+    ),
+    lang: str = Form(
+        "pt",
+        pattern="^(pt|en|es)$",
+        description=(
+            "Language for the refusal and warning prose (pt, en, es). "
+            "Same closed set as the query parameter elsewhere: an unknown "
+            "code is rejected rather than silently served in Portuguese."
+        ),
     ),
     ref_enthalpy_J_g: float | None = Form(
         None,
@@ -268,7 +293,7 @@ async def analyse_trace_endpoint(
         tmp.write(content)
         tmp_path = Path(tmp.name)
     try:
-        tf = read_trace_file(tmp_path)
+        tf = read_trace_file(tmp_path, lang)
     except TraceImportError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     finally:
@@ -277,7 +302,11 @@ async def analyse_trace_endpoint(
     x_role, y_role = _TRACE_ROLES[target_key]
     try:
         resolved = resolve_trace(
-            tf, x_role, y_role, invert_for_endothermic_up=(target_key == "dsc")
+            tf,
+            x_role,
+            y_role,
+            invert_for_endothermic_up=(target_key == "dsc"),
+            lang=lang,
         )
     except TraceImportError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -301,35 +330,35 @@ async def analyse_trace_endpoint(
                 ref_source = entry.primary.source
                 ref_key = entry.key
                 notes.append(
-                    f"Entalpia de referência de 100 % cristalino tomada do banco "
-                    f"interno para '{entry.display_name}' ({ref_key}): "
-                    f"{ref_value:g} J/g. Fonte: {ref_source}"
+                    msg(
+                        "dsc.ref_enthalpy_from_db",
+                        lang,
+                        name=i18n.display_name(entry.key, lang, entry.display_name),
+                        key=ref_key,
+                        value=ref_value,
+                        source=ref_source,
+                    )
                 )
             elif entry is not None and entry.primary is None:
                 refusals.append(
-                    f"A amostra foi reconhecida como {entry.display_name}, que é "
-                    f"amorfo e não tem entalpia de referência: a cristalinidade "
-                    f"não se aplica. {entry.note or ''}".strip()
+                    msg(
+                        "dsc.amorphous_refused",
+                        lang,
+                        name=i18n.display_name(entry.key, lang, entry.display_name),
+                        note=i18n.note(entry.key, lang, entry.note) or "",
+                    ).strip()
                 )
 
         if resolved.heating_rate is None:
-            refusals.append(
-                "O arquivo não declara a taxa de aquecimento, então a "
-                "cristalinidade não foi calculada. O ΔHm é reportado em "
-                "J/g apenas se a taxa for fornecida."
-            )
+            refusals.append(msg("dsc.heating_rate_missing", lang))
         elif ref_value is None:
-            refusals.append(
-                "Nenhuma entalpia de referência foi fornecida, e o nome da "
-                "amostra não foi reconhecido no banco interno "
-                "(GET /api/v1/thermal/crystallinity-references lista o que "
-                "existe). O ΔHm é reportado, mas sem cristalinidade."
-            )
+            refusals.append(msg("dsc.ref_enthalpy_missing", lang))
         r = analyse_dsc(
             resolved.x,
             resolved.y,
             heating_rate=resolved.heating_rate,
             ref_enthalpy_J_g=ref_value,
+            lang=lang,
             # The trace came through ``resolve_trace``, which normalises an
             # exothermic-up header to the endothermic-up convention the
             # analysis uses. So a melting endotherm is known to point up, and
@@ -343,7 +372,7 @@ async def analyse_trace_endpoint(
         # (convertendo %T quando o arquivo exportava transmitância).
         r = analyse_ftir(resolved.x, resolved.y)
     else:
-        r = analyse_tga(resolved.x, resolved.y)
+        r = analyse_tga(resolved.x, resolved.y, lang=lang)
 
     n = len(resolved.x)
     span = abs(resolved.x[-1] - resolved.x[0]) if n > 1 else 0.0
@@ -351,10 +380,12 @@ async def analyse_trace_endpoint(
     too_sparse = points_per_degree is not None and points_per_degree < _MIN_POINTS_PER_DEGREE
     if too_sparse:
         refusals.append(
-            f"O traço tem {points_per_degree:.1f} ponto(s) por grau. Abaixo de "
-            f"{_MIN_POINTS_PER_DEGREE:.0f} nenhuma temperatura de transição "
-            "vítrea é localizável neste arquivo; um pico largo, como o de "
-            "fusão, continua utilizável."
+            msg(
+                "trace.sparse_tg_refused",
+                lang,
+                ppd=points_per_degree,
+                minimum=_MIN_POINTS_PER_DEGREE,
+            )
         )
 
     payload = r.as_dict() if hasattr(r, "as_dict") else {}
@@ -376,9 +407,11 @@ async def analyse_trace_endpoint(
                 payload["claims"].pop(key, None)
         if removed:
             refusals.append(
-                "Os campos "
-                + ", ".join(f"'{k}'" for k in removed)
-                + " foram omitidos por não serem localizáveis neste arquivo."
+                msg(
+                    "trace.fields_omitted",
+                    lang,
+                    fields=", ".join(f"'{k}'" for k in removed),
+                )
             )
 
     return TraceAnalysis(
@@ -426,7 +459,10 @@ async def tga_endpoint(payload: TGATraceInput) -> TGAResult:
     """
     try:
         r = analyse_tga(
-            payload.temperature, payload.mass_pct, smooth_window=payload.smooth_window
+            payload.temperature,
+            payload.mass_pct,
+            smooth_window=payload.smooth_window,
+            lang=payload.lang,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -480,6 +516,7 @@ async def dsc_endpoint(payload: DSCTraceInput) -> DSCResult:
             heating_rate=payload.heating_rate,
             ref_enthalpy_J_g=payload.ref_enthalpy_J_g,
             smooth_window=payload.smooth_window,
+            lang=payload.lang,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

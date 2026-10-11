@@ -96,10 +96,11 @@ def test_tga_flags_a_faint_event_riding_on_a_large_step():
     m -= 5.0 / (1 + np.exp(-(T - 120) / 15))     # broad, faint moisture loss
     m -= 72.0 / (1 + np.exp(-(T - 430) / 18))    # dominant decomposition
     m += np.random.default_rng(11).normal(0, 0.02, T.size)
-    r = analyse_tga(T, m)
+    r = analyse_tga(T, m, lang="en")
     # The mass still balances, whether or not the faint event is split out.
     attributed = sum(s["loss_pct"] for s in r.steps) + r.unattributed_loss_pct
     assert attributed == pytest.approx(float(m[0] - m[-1]), abs=0.05)
+    # ``lang="en"``: a asserção procura a redação inglesa, e o padrão é pt.
     assert any("riding on the main decomposition" in n for n in r.notes)
 
 

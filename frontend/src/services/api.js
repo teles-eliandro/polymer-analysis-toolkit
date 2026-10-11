@@ -89,17 +89,18 @@ export const molecularApi = {
 };
 
 export const thermalApi = {
-  tga: (temperature, massPct, smoothWindow = 11) =>
+  tga: (temperature, massPct, { smoothWindow = 11, lang = 'pt' } = {}) =>
     postJson('/api/v1/thermal/tga', {
       temperature,
       mass_pct: massPct,
       smooth_window: smoothWindow,
+      lang,
     }),
 
   dsc: (
     temperature,
     heatFlow,
-    { heatingRate = null, refEnthalpy = null, smoothWindow = 11, sampleName = null } = {},
+    { heatingRate = null, refEnthalpy = null, smoothWindow = 11, sampleName = null, lang = 'pt' } = {},
   ) =>
     postJson('/api/v1/thermal/dsc', {
       temperature,
@@ -108,6 +109,7 @@ export const thermalApi = {
       ref_enthalpy_J_g: refEnthalpy,
       smooth_window: smoothWindow,
       sample_name: sampleName,
+      lang,
     }),
 
   /**
@@ -119,10 +121,15 @@ export const thermalApi = {
    * unit, with nothing reporting it. The server reader resolves each column's
    * role from its label and unit; this is the only way to reach it.
    */
-  importFile: (file, target) => {
+  importFile: (file, target, lang = 'pt') => {
     const form = new FormData();
     form.append('file', file);
     form.append('target', target);
+    // O idioma vai no pedido porque as recusas do leitor são prosa, e a prosa
+    // tem idioma: um ficheiro sem coluna de temperatura é recusado com uma
+    // frase, e essa frase tem de sair na língua da página. Sem isto as
+    // páginas en/es recebiam a frase em português.
+    form.append('lang', lang);
     return http.post('/api/v1/thermal/import', form);
   },
 
@@ -133,11 +140,12 @@ export const thermalApi = {
    * header, which is the only place it is authoritative. Offering it as a
    * form field here would invite a second, silently differing value.
    */
-  analyseFile: (file, target, { refEnthalpy = null } = {}) => {
+  analyseFile: (file, target, { refEnthalpy = null, lang = 'pt' } = {}) => {
     const form = new FormData();
     form.append('file', file);
     form.append('target', target);
     if (refEnthalpy !== null) form.append('ref_enthalpy_J_g', String(refEnthalpy));
+    form.append('lang', lang);
     return http.post('/api/v1/thermal/analyse', form);
   },
 

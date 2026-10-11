@@ -28,6 +28,8 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from app.core.messages_i18n import IDIOMA_ORIGEM, msg
+
 __all__ = [
     "TGAResult",
     "DSCResult",
@@ -1619,6 +1621,7 @@ def analyse_tga(
     mass_pct: Sequence[float],
     smooth_window: int = 11,
     min_step_pct: float = 5.0,
+    lang: str = IDIOMA_ORIGEM,
 ) -> TGAResult:
     """
     Analyse a TGA trace given as (temperature / mass percent remaining).
@@ -1661,12 +1664,7 @@ def analyse_tga(
 
     notes: list[str] = []
     if unattributed > max(1.0, 0.02 * abs(m_smooth[0] - m_smooth[-1])):
-        notes.append(
-            f"{unattributed:.1f} % of the mass loss is not part of any reported "
-            "step. It is either spread too gradually for its rate to stand out "
-            "against the noise, or spread across steps that overlap. Each "
-            "reported step is real; the list is not necessarily complete."
-        )
+        notes.append(msg("tga.unattributed_loss", lang, unattributed=unattributed))
     if len(steps) == 1 and steps[0]["loss_pct"] > 10.0:
         # A single wide step can hide a second, faint event inside it: a small
         # moisture loss whose rate never rises to the detection threshold is
@@ -1681,19 +1679,16 @@ def analyse_tga(
         ]
         if early and (early[0] - early[-1]) > max(2.0, 0.05 * span):
             notes.append(
-                f"One step was detected, spanning {onset:.0f}-{end:.0f} C, but "
-                f"{early[0] - early[-1]:.1f} % of its loss happens in the first "
-                "quarter of that range. A weak event (moisture or solvent) is "
-                "probably riding on the main decomposition; it is included in "
-                "this step rather than reported separately because its rate "
-                "does not stand out against the noise."
+                msg(
+                    "tga.one_step_early_loss",
+                    lang,
+                    onset=onset,
+                    end=end,
+                    early=early[0] - early[-1],
+                )
             )
     if len(steps) > 1:
-        notes.append(
-            "Several steps were detected. T_max_rate names the fastest one, "
-            "which is not necessarily the first; use the step list for "
-            "per-step onsets."
-        )
+        notes.append(msg("tga.several_steps", lang))
 
     # Physical plausibility of the input, which the analysis otherwise takes on
     # trust. A thermobalance cannot weigh a negative mass, and a run that
@@ -1705,26 +1700,12 @@ def analyse_tga(
     # see), but the analyst is told, because "residue = -1.4 %" is otherwise
     # accepted as a measurement when it is not one.
     if residue < 0.0:
-        notes.append(
-            f"The trace ends at {residue:.2f} % mass, which is negative and "
-            "therefore not a physical residue. This is the instrument's own "
-            "value, reported unchanged; the run either drifted or was "
-            "mis-zeroed. Do not quote this as a residue."
-        )
+        notes.append(msg("tga.residue_negative", lang, residue=residue))
     elif residue > 105.0:
-        notes.append(
-            f"The trace ends at {residue:.2f} % mass, above the starting "
-            "value. Buoyancy or a mis-zeroed balance is the usual cause; "
-            "treat the residue as unquantified."
-        )
+        notes.append(msg("tga.residue_above_start", lang, residue=residue))
     start_pct = float(m_smooth[0])
     if abs(start_pct - 100.0) > 5.0:
-        notes.append(
-            f"The trace starts at {start_pct:.1f} % rather than 100 %. It is "
-            "normalised to its own first point, so the percentage axis is "
-            "relative; a run that begins this far from 100 % has already lost "
-            "volatiles before the ramp."
-        )
+        notes.append(msg("tga.start_below_100", lang, start_pct=start_pct))
 
     return TGAResult(
         Td_5pct=Td5,
@@ -1748,6 +1729,7 @@ def analyse_dsc(
     ref_enthalpy_J_g: float | None = None,
     smooth_window: int = 11,
     polarity_known: bool = False,
+    lang: str = IDIOMA_ORIGEM,
 ) -> DSCResult:
     """
     Analyse a DSC trace.
@@ -1933,16 +1915,12 @@ def analyse_dsc(
                         # a deste polímero, a amostra tem mais de uma fase
                         # cristalina (blenda), ou a linha de base da integração
                         # ficou alta e inflou a área.
-                        result.crystallinity_refusal = (
-                            f"A cristalinidade calculada ({xc:.1f} %) é "
-                            f"fisicamente impossível: o ΔHm medido "
-                            f"({result.delta_Hm:.1f} J/g) excede a entalpia de "
-                            f"referência de 100 % cristalino "
-                            f"({ref_enthalpy_J_g:g} J/g). O valor é reportado "
-                            "para inspeção, mas não pode ser usado como "
-                            "resultado. Verifique se a referência é a deste "
-                            "polímero, se a amostra tem uma só fase cristalina, "
-                            "e se a linha de base da integração está correta."
+                        result.crystallinity_refusal = msg(
+                            "dsc.impossible_crystallinity",
+                            lang,
+                            xc=xc,
+                            dhm=result.delta_Hm,
+                            ref=ref_enthalpy_J_g,
                         )
             melt_range = (float(T[a]), float(T[b]))
 

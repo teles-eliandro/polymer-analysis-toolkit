@@ -36,7 +36,10 @@ def _trace(end_pct: float = -1.41, start_pct: float = 100.0, n: int = 2000):
 def test_negative_residue_is_flagged():
     """A trace ending below zero must carry a warning, not a quiet number."""
     T, m = _trace(end_pct=-1.41)
-    res = analyse_tga(T, m)
+    # ``lang="en"`` porque estas asserções comparam a redação em inglês. O
+    # padrão da análise é o português, o idioma de origem das mensagens; um
+    # teste que procura palavras inglesas tem de pedir inglês.
+    res = analyse_tga(T, m, lang="en")
 
     assert res.residue_pct < 0.0, "the raw value must survive unchanged"
     joined = " ".join(res.notes).lower()
@@ -74,7 +77,7 @@ def test_healthy_trace_is_not_flagged():
 def test_high_residue_is_flagged():
     """A residue above the starting mass is also not a measurement."""
     T, m = _trace(end_pct=108.0)
-    res = analyse_tga(T, m)
+    res = analyse_tga(T, m, lang="en")
     joined = " ".join(res.notes).lower()
     assert "above the starting" in joined or "unquantified" in joined, (
         f"an impossible high residue must be flagged; notes were {res.notes!r}"

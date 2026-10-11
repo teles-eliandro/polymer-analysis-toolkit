@@ -135,6 +135,15 @@ class TGATraceInput(BaseModel):
     temperature: list[float] = Field(..., min_length=3)
     mass_pct: list[float] = Field(..., min_length=3, description="Mass remaining, percent.")
     smooth_window: int = Field(11, ge=1, le=101)
+    lang: str = Field(
+        "pt",
+        pattern="^(pt|en|es)$",
+        description=(
+            "Language for the refusal and warning prose (pt, en, es). "
+            "Defaults to Portuguese, the source language. Citations and "
+            "identifiers are never translated."
+        ),
+    )
 
 
 class DSCResult(BaseModel):
@@ -256,6 +265,15 @@ class PropertyComparison(BaseModel):
 class DSCTraceInput(BaseModel):
     temperature: list[float] = Field(..., min_length=3)
     heat_flow: list[float] = Field(..., min_length=3, description="Heat flow in W/g.")
+    lang: str = Field(
+        "pt",
+        pattern="^(pt|en|es)$",
+        description=(
+            "Language for the refusal and warning prose (pt, en, es). "
+            "Defaults to Portuguese, the source language. Citations and "
+            "identifiers are never translated."
+        ),
+    )
     heating_rate: float | None = Field(
         None, gt=0, description="Program rate in K/min. Required for enthalpy in J/g."
     )

@@ -127,7 +127,7 @@ export default function ThermalPanel() {
     }
     setLoading(true);
     try {
-      const res = await thermalApi.importFile(file, isTga ? 'tga' : 'dsc');
+      const res = await thermalApi.importFile(file, isTga ? 'tga' : 'dsc', language);
       const data = res.data || {};
       const xs = data.temperature || [];
       const ys = data.signal || [];
@@ -212,13 +212,14 @@ export default function ThermalPanel() {
     setLoading(true);
     try {
       if (isTga) {
-        const res = await thermalApi.tga(x, y);
+        const res = await thermalApi.tga(x, y, { lang: language });
         setResult({ kind: 'tga', data: res.data });
       } else {
         const res = await thermalApi.dsc(x, y, {
           heatingRate: heatingRate === '' ? null : Number(heatingRate),
           refEnthalpy: refEnthalpy === '' ? null : Number(refEnthalpy),
           sampleName: sampleName.trim() === '' ? null : sampleName.trim(),
+          lang: language,
         });
         setResult({ kind: 'dsc', data: res.data });
       }

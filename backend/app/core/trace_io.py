@@ -47,6 +47,7 @@ from pathlib import Path
 import numpy as np
 
 from app.core.ingest import _to_float
+from app.core.messages_i18n import IDIOMA_ORIGEM, msg, role_label
 
 
 class TraceImportError(ValueError):
@@ -290,7 +291,7 @@ class TraceFile:
 _SKIP_META = {"exporttype", "ftype", "format", "corr. code", "remark"}
 
 
-def _decode(raw: bytes) -> str:
+def _decode(raw: bytes, lang: str = IDIOMA_ORIGEM) -> str:
     """
     Decodifica o arquivo tolerando os encodings que os instrumentos usam.
 
@@ -305,12 +306,7 @@ def _decode(raw: bytes) -> str:
     inventadas -- a análise rodava sobre lixo sem que nada reclamasse.
     """
     if _looks_binary(raw):
-        raise TraceImportError(
-            "o arquivo parece binário, não um export de texto delimitado. "
-            "Se for um formato proprietário do instrumento (ex.: .tri, .ngb-sd7), "
-            "exporte-o como texto/CSV, ou informe o formato para que o leitor "
-            "correto seja usado."
-        )
+        raise TraceImportError(msg("trace.binary_file", lang))
     for enc in ("utf-8-sig", "latin-1"):
         try:
             text = raw.decode(enc)
@@ -613,7 +609,7 @@ def _looks_like_keyval_spectrum(lines: Sequence[str]) -> bool:
     return False
 
 
-def _read_keyval_spectrum(p: Path, text: str) -> TraceFile:
+def _read_keyval_spectrum(p: Path, text: str, lang: str = IDIOMA_ORIGEM) -> TraceFile:
     """
     Lê um espectro cujos eixos são declarados em linhas ``CHAVE<TAB>valor``.
 
@@ -703,11 +699,7 @@ def _read_keyval_spectrum(p: Path, text: str) -> TraceFile:
                         meta["sample"] = cand
                         break
     if data_start is None:
-        raise TraceImportError(
-            f"{p.name}: o cabeçalho foi lido, mas não encontrei o início dos "
-            "dados. Um espectro JASCO/PerkinElmer traz uma linha 'XYDATA' "
-            "antes dos pontos."
-        )
+        raise TraceImportError(msg("trace.keyval.no_data_start", lang, name=p.name))
 
     # Separador e decimal dos dados. O JASCO escreve vírgula decimal e TAB
     # como separador de campo (``399,1927\t0,0104689``), o que torna ambíguo
@@ -715,11 +707,11 @@ def _read_keyval_spectrum(p: Path, text: str) -> TraceFile:
     # TAB, o TAB separa e a vírgula é decimal.
     sample_rows = [ln for ln in lines[data_start : data_start + 200] if ln.strip()]
     if not sample_rows:
-        raise TraceImportError(f"{p.name}: o marcador de dados existe mas não há pontos.")
+        raise TraceImportError(msg("trace.keyval.no_points", lang, name=p.name))
     body_lines = [ln.strip() for ln in lines[data_start:] if ln.strip()]
     rows = _parse_axis_pair_rows(body_lines)
     if not rows:
-        raise TraceImportError(f"{p.name}: nenhuma linha de dados numérica foi lida.")
+        raise TraceImportError(msg("trace.keyval.no_numeric", lang, name=p.name))
 
     # Papéis e unidades vêm do cabeçalho. Sem declaração, a unidade é inferida
     # do cabeçalho de colunas quando existe (``cm-1,%T``).
@@ -739,10 +731,13 @@ def _read_keyval_spectrum(p: Path, text: str) -> TraceFile:
     y_role = _AXIS_ROLE_BY_UNIT.get(y_unit)
     if x_role is None or y_role is None:
         raise TraceImportError(
-            f"{p.name}: o cabeçalho declara XUNITS='{x_unit_raw or '?'}' e "
-            f"YUNITS='{y_unit_raw or '?'}', que não sei mapear. Espectros "
-            "conhecidos: XUNITS em 1/CM (número de onda) e YUNITS em "
-            "ABSORBANCE ou %T."
+            msg(
+                "trace.keyval.unknown_units",
+                lang,
+                name=p.name,
+                x=x_unit_raw or "?",
+                y=y_unit_raw or "?",
+            )
         )
 
     # Papel pelo nome do cabeçalho, quando houver, para não perder um rótulo
@@ -797,17 +792,9 @@ def _read_keyval_spectrum(p: Path, text: str) -> TraceFile:
         y_col.unit = "au"
         y_col.role = "absorbance"
         y_col.factor = 1.0
-        warnings.append(
-            "O arquivo exporta %T (transmitância); converti para absorbância "
-            "com A = 2 - log10(%T), que é a grandeza que a análise de FTIR pede."
-        )
+        warnings.append(msg("trace.percent_t_converted", lang))
         if n_over:
-            warnings.append(
-                f"{n_over} ponto(s) traziam %T acima de 100 (deriva de linha "
-                "de base do instrumento); limitei a 100 antes de converter, "
-                "porque transmitância acima de 100 % é fisicamente impossível "
-                "e daria absorbância negativa, que a análise recusa."
-            )
+            warnings.append(msg("trace.percent_t_over_100", lang, n=n_over))
 
     return TraceFile(path=str(p), metadata=meta, columns=columns, warnings=warnings)
 
@@ -852,7 +839,7 @@ def _parse_axis_pair_rows(body_lines: Sequence[str]) -> list[tuple[float, float]
     return out
 
 
-def _read_tri_as_trace_file(p: Path) -> TraceFile:
+def _read_tri_as_trace_file(p: Path, lang: str = IDIOMA_ORIGEM) -> TraceFile:
     """Converte um .tri no mesmo ``TraceFile`` que o caminho de texto produz."""
     # Import tardio: o leitor binário importa numpy, e o caminho de texto não
     # deve pagar esse custo quando o arquivo é .txt.
@@ -900,12 +887,15 @@ def _read_tri_as_trace_file(p: Path) -> TraceFile:
 
     warnings: list[str] = []
     if not columns:
-        raise TraceImportError(f"{p.name}: nenhum canal numérico recuperado do arquivo .tri")
+        raise TraceImportError(msg("trace.tri.no_channel", lang, name=p.name))
     roles = {c.role for c in columns}
     if "temperature" not in roles or "heat_flow" not in roles:
         warnings.append(
-            "canal de temperatura ou de fluxo de calor ausente: "
-            f"papéis presentes = {sorted(r for r in roles if r)}"
+            msg(
+                "trace.tri.missing_channels",
+                lang,
+                roles=sorted(r for r in roles if r),
+            )
         )
 
     tf = TraceFile(path=str(p), metadata=meta, columns=columns, warnings=warnings)
@@ -952,7 +942,7 @@ def _assign_factor(col: ParsedColumn) -> None:
     col.factor = 1.0 if col.unit == "" else None
 
 
-def read_trace_file(path: str | Path) -> TraceFile:
+def read_trace_file(path: str | Path, lang: str = IDIOMA_ORIGEM) -> TraceFile:
     """Lê um arquivo de instrumento e devolve colunas rotuladas e metadados.
 
     Despacha por formato: contêineres binários da TA Instruments vão para o
@@ -963,9 +953,9 @@ def read_trace_file(path: str | Path) -> TraceFile:
     p = Path(path)
     raw = p.read_bytes()
     if p.suffix.lower() in _BINARY_SUFFIXES or _looks_like_tri(raw):
-        return _read_tri_as_trace_file(p)
+        return _read_tri_as_trace_file(p, lang)
 
-    text = _decode(raw)
+    text = _decode(raw, lang)
     lines = text.split("\n")
 
     # Terceira porta: espectros que declaram os eixos em linhas próprias
@@ -973,12 +963,12 @@ def read_trace_file(path: str | Path) -> TraceFile:
     # antes do caminho de texto porque aquele tomaria a linha ``TITLE<TAB>...``
     # como cabeçalho de colunas e perderia os eixos.
     if _looks_like_keyval_spectrum(lines):
-        return _read_keyval_spectrum(p, text)
+        return _read_keyval_spectrum(p, text, lang)
 
     meta, body = _split_header_and_body(lines)
 
     if not body:
-        raise TraceImportError(f"{p.name}: nenhuma linha de dados encontrada")
+        raise TraceImportError(msg("trace.no_data_lines", lang, name=p.name))
 
     # O separador declarado no cabeçalho vence qualquer heurística.
     declared = meta.get("separator", "").lower()
@@ -1078,7 +1068,10 @@ class ResolvedTrace:
 
 
 def _apply_factor(
-    values: list[float], factor: float | str | None, unit: str
+    values: list[float],
+    factor: float | str | None,
+    unit: str,
+    lang: str = IDIOMA_ORIGEM,
 ) -> tuple[list[float], str | None]:
     """
     Converte uma coluna à unidade canônica.
@@ -1087,37 +1080,15 @@ def _apply_factor(
     é uma conversão que não pode ser feita com honestidade.
     """
     if factor is None:
-        return values, (
-            f"a coluna está em '{unit}', e converter para a unidade canônica "
-            "exige um dado que o arquivo não traz (por exemplo a massa da "
-            "amostra para um sinal absoluto em mW). Forneça o dado ou exporte "
-            "o sinal normalizado pela massa."
-        )
+        return values, msg("trace.axis.unit_unconvertible", lang, unit=unit)
     if isinstance(factor, str):
         if factor == "+273.15":
             return [v + 273.15 for v in values], None
         if factor == "F2C":
             return [(v - 32.0) * 5.0 / 9.0 for v in values], None
-        return values, f"conversão '{factor}' não implementada"
+        return values, msg("trace.axis.factor_unknown", lang, factor=factor)
     return [v * factor for v in values], None
 
-
-#: Rolos nomeados, para mensagens legíveis.
-_ROLE_LABEL = {
-    "temperature": "temperatura",
-    "heat_flow": "fluxo de calor",
-    "mass": "massa",
-    "stress": "tensão",
-    "strain": "deformação",
-    "omega": "frequência angular",
-    "g_prime": "módulo de armazenamento G'",
-    "g_double_prime": "módulo de perdas G''",
-    "wavenumber": "número de onda",
-    "transmittance": "transmitância",
-    "absorbance": "absorbância",
-    "two_theta": "ângulo 2θ",
-    "intensity": "intensidade",
-}
 
 
 def _pick(tf: TraceFile, role: str) -> ParsedColumn | None:
@@ -1135,6 +1106,7 @@ def resolve_trace(
     y_role: str,
     *,
     invert_for_endothermic_up: bool = False,
+    lang: str = IDIOMA_ORIGEM,
 ) -> ResolvedTrace:
     """
     Resolve um arquivo lido nas duas séries que a análise pede.
@@ -1155,27 +1127,38 @@ def resolve_trace(
     if xc is None:
         found = ", ".join(f"'{c.raw_header or f'coluna {c.index + 1}'}'" for c in tf.columns)
         raise TraceImportError(
-            f"Não encontrei a coluna de {_ROLE_LABEL.get(x_role, x_role)}. "
-            f"O arquivo tem: {found}. Se o papel da coluna for outro, "
-            "renomeie o cabeçalho ou converta o arquivo para CSV de duas colunas."
+            msg(
+                "trace.axis.missing",
+                lang,
+                role=role_label(x_role, lang),
+                found=found,
+            )
         )
     if yc is None:
         found = ", ".join(f"'{c.raw_header or f'coluna {c.index + 1}'}'" for c in tf.columns)
         raise TraceImportError(
-            f"Não encontrei a coluna de {_ROLE_LABEL.get(y_role, y_role)}. "
-            f"O arquivo tem: {found}."
+            msg(
+                "trace.axis.missing_short",
+                lang,
+                role=role_label(y_role, lang),
+                found=found,
+            )
         )
 
     # Comprimento comum. Um arquivo real pode ter colunas de tamanhos
     # diferentes quando o instrumento escreve blocos separados.
     n = min(len(xc.values), len(yc.values))
     if n < 3:
-        raise TraceImportError(f"Só {n} ponto(s) utilizáveis: a análise precisa de pelo menos 3.")
+        raise TraceImportError(msg("trace.too_few_points", lang, n=n))
     if len(xc.values) != len(yc.values):
         notes.append(
-            f"As colunas têm comprimentos diferentes "
-            f"({len(xc.values)} e {len(yc.values)}); usei os {n} primeiros "
-            "pontos de cada."
+            msg(
+                "trace.ragged_columns",
+                lang,
+                nx=len(xc.values),
+                ny=len(yc.values),
+                n=n,
+            )
         )
 
     x_vals = xc.values[:n]
@@ -1186,20 +1169,18 @@ def resolve_trace(
     mask = [i for i in range(n) if np.isfinite(x_vals[i]) and np.isfinite(y_vals[i])]
     dropped = n - len(mask)
     if dropped:
-        notes.append(f"{dropped} ponto(s) não numéricos foram descartados.")
+        notes.append(msg("trace.non_numeric_dropped", lang, dropped=dropped))
     x_vals = [x_vals[i] for i in mask]
     y_vals = [y_vals[i] for i in mask]
     if len(x_vals) < 3:
-        raise TraceImportError(
-            "Depois de descartar valores não numéricos sobraram menos de 3 " "pontos."
-        )
+        raise TraceImportError(msg("trace.after_dropping_too_few", lang))
 
-    x_out, x_refuse = _apply_factor(x_vals, xc.factor, xc.unit or "")
-    y_out, y_refuse = _apply_factor(y_vals, yc.factor, yc.unit or "")
+    x_out, x_refuse = _apply_factor(x_vals, xc.factor, xc.unit or "", lang)
+    y_out, y_refuse = _apply_factor(y_vals, yc.factor, yc.unit or "", lang)
     if x_refuse:
-        refusals.append(f"eixo x: {x_refuse}")
+        refusals.append(msg("trace.axis.x", lang, reason=x_refuse))
     if y_refuse:
-        refusals.append(f"eixo y: {y_refuse}")
+        refusals.append(msg("trace.axis.y", lang, reason=y_refuse))
     if refusals:
         raise TraceImportError(" ".join(refusals))
 
@@ -1211,18 +1192,16 @@ def resolve_trace(
     if all(d <= 0 for d in diffs):
         x_out.reverse()
         y_out.reverse()
-        notes.append("O eixo x vinha decrescente; inverti a ordem.")
+        notes.append(msg("trace.x_descending", lang))
     elif not all(d >= 0 for d in diffs):
         # Um ou outro ponto fora de ordem é ruído de export; um traço que
         # sobe e desce é um método com rampa e patamar.
         bad = sum(1 for d in diffs if d < 0)
         if bad > len(diffs) * 0.05:
             raise TraceImportError(
-                f"O eixo x não é monotônico ({bad} de {len(diffs)} passos "
-                "decrescentes). Isto costuma indicar um método com várias "
-                "rampas; o PAT analisa uma rampa por vez."
+                msg("trace.x_not_monotonic", lang, bad=bad, total=len(diffs))
             )
-        notes.append(f"{bad} ponto(s) fora de ordem no eixo x foram ignorados.")
+        notes.append(msg("trace.x_out_of_order", lang, bad=bad))
 
     # Sinal exotérmico. A análise assume endotérmico para cima. Um DSC exportado
     # com exotérmico para cima tem o sinal invertido, e isso muda Tg, Tm e a
@@ -1230,10 +1209,7 @@ def resolve_trace(
     direction = tf.exothermic_direction
     if invert_for_endothermic_up and direction == "up":
         y_out = [-v for v in y_out]
-        notes.append(
-            "O cabeçalho declara exotérmico PARA CIMA (#EXO); inverti o sinal "
-            "para a convenção endotérmico-para-cima que a análise usa."
-        )
+        notes.append(msg("trace.exo_up_inverted", lang))
 
     return ResolvedTrace(
         x=x_out,
